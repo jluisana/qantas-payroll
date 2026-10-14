@@ -1,3 +1,4 @@
+JJJJJJ
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -37,15 +38,23 @@
 
             const [rosterText, setRosterText] = React.useState('');
             const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+            const [isFilesOpen, setIsFilesOpen] = React.useState(false);
             const [expandedYear, setExpandedYear] = React.useState('2026');
             
             // Modal de año
             const [pendingFileContent, setPendingFileContent] = React.useState(null);
+            const [pendingFileName, setPendingFileName] = React.useState('');
             const [selectedModalYear, setSelectedModalYear] = React.useState('2026');
             
-            // Histórico acumulado por usuario
+            // Histórico acumulado por usuario y lista de archivos subidos
             const [allTrips, setAllTrips] = React.useState(() => {
                 const saved = localStorage.getItem(`trip_history_${currentUser}`);
+                if (saved) return JSON.parse(saved);
+                return [];
+            });
+
+            const [uploadedFiles, setUploadedFiles] = React.useState(() => {
+                const saved = localStorage.getItem(`uploaded_files_${currentUser}`);
                 if (saved) return JSON.parse(saved);
                 return [];
             });
@@ -55,17 +64,20 @@
             // Cargar datos al cambiar de usuario
             React.useEffect(() => {
                 if (isAuthenticated) {
-                    const saved = localStorage.getItem(`trip_history_${currentUser}`);
-                    setAllTrips(saved ? JSON.parse(saved) : []);
+                    const savedTrips = localStorage.getItem(`trip_history_${currentUser}`);
+                    setAllTrips(savedTrips ? JSON.parse(savedTrips) : []);
+                    const savedFiles = localStorage.getItem(`uploaded_files_${currentUser}`);
+                    setUploadedFiles(savedFiles ? JSON.parse(savedFiles) : []);
                 }
             }, [currentUser, isAuthenticated]);
 
-            // Guardar viajes por usuario
+            // Guardar datos por usuario
             React.useEffect(() => {
                 if (isAuthenticated) {
                     localStorage.setItem(`trip_history_${currentUser}`, JSON.stringify(allTrips));
+                    localStorage.setItem(`uploaded_files_${currentUser}`, JSON.stringify(uploadedFiles));
                 }
-            }, [allTrips, currentUser, isAuthenticated]);
+            }, [allTrips, uploadedFiles, currentUser, isAuthenticated]);
 
             // Guardar credenciales
             React.useEffect(() => {
@@ -123,7 +135,7 @@
             const singaporeAllowancePerTrip = 328.69; 
             const holidayRatePerDay = 17.39; 
 
-            // LÓGICA DE SEMÁFORO PRECISA (16 mes anterior - 15 mes activo)
+            // Evaluación de semáforo
             const getPeriodStatus = (monthStr, yearNum) => {
                 const targetM = parseInt(monthStr, 10);
                 const targetY = yearNum;
@@ -131,20 +143,20 @@
                 const prevM = targetM === 1 ? 12 : targetM - 1;
                 const prevY = targetM === 1 ? targetY - 1 : targetY;
 
-                // 1ª Mitad: 16 al último día del mes anterior
                 const hasFirstHalf = allTrips.some(f => f.year === prevY && f.month === prevM && f.day >= 16);
-                // 2ª Mitad: 1 al 15 del mes actual
-                const hasSecondHalf = allTrips.some(f => f.year === targetY && f.month === targetM && f.day <= 15);
+                const hasSecondHalf = allTrips.some(f => f.year === targetY && f.month === targetM && f.day >= 2 && f.day <= 15);
 
-                if (!hasFirstHalf && !hasSecondHalf) return 'empty'; // Gris
-                if (hasFirstHalf && hasSecondHalf) return 'complete'; // Verde
-                return 'partial'; // Naranja
+                if (!hasFirstHalf && !hasSecondHalf) return 'empty';
+                if (hasFirstHalf && hasSecondHalf) return 'complete';
+                return 'partial';
             };
 
-            // Procesador de Roster
+            // Procesador de Roster vinculado al archivo
             const confirmAndProcessRoster = (targetYear) => {
                 const text = pendingFileContent;
+                const fileName = pendingFileName;
                 setPendingFileContent(null);
+                setPendingFileName('');
                 if (!text || !text.trim()) return;
 
                 const lines = text.split(/\r?\n/);
@@ -183,17 +195,19 @@
                 let currentHolidayBlock = null;
                 let currentSbyBlock = null;
 
+                const fileToken = `${fileName}_${Date.now()}`;
+
                 rawDutyList.forEach(item => {
                     const isSby = item.duty === 'SBY' || item.duty === 'SR';
                     const isAL = item.duty === 'AL';
 
                     if (currentSbyBlock && !isSby) {
-                        newProcessedTrips.push(currentSbyBlock);
+                        newProcessedTrips.push({ ...currentSbyBlock, fileToken });
                         currentSbyBlock = null;
                     }
 
                     if (currentHolidayBlock && !isAL) {
-                        newProcessedTrips.push(currentHolidayBlock);
+                        newProcessedTrips.push({ ...currentHolidayBlock, fileToken });
                         currentHolidayBlock = null;
                     }
 
@@ -254,28 +268,29 @@
                                 count: isPerth ? 4 : 2,
                                 delay16h: false,
                                 holiday: false,
-                                calledOut: false
+                                calledOut: false,
+                                fileToken
                             });
                         }
                     }
                 });
 
-                if (currentHolidayBlock) newProcessedTrips.push(currentHolidayBlock);
-                if (currentSbyBlock) newProcessedTrips.push(currentSbyBlock);
+                if (currentHolidayBlock) newProcessedTrips.push({ ...currentHolidayBlock, fileToken });
+                if (currentSbyBlock) newProcessedTrips.push({ ...currentSbyBlock, fileToken });
 
-                const updatedHistory = [...allTrips];
-                newProcessedTrips.forEach(newItem => {
-                    const exists = updatedHistory.some(existing => existing.dateStr === newItem.dateStr && existing.duty === newItem.duty);
-                    if (!exists) {
-                        updatedHistory.push(newItem);
-                    }
-                });
-
+                const updatedHistory = [...allTrips, ...newProcessedTrips];
                 updatedHistory.sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month - b.month : a.day - b.day));
 
+                const newFileEntry = {
+                    id: fileToken,
+                    name: fileName,
+                    dateUploaded: new Date().toLocaleDateString()
+                };
+
                 setAllTrips(updatedHistory);
+                setUploadedFiles([...uploadedFiles, newFileEntry]);
                 setSelectedPeriod(`10-${targetYear}`);
-                alert(`¡Roster guardado con éxito para ${currentUser} (${targetYear})!`);
+                alert(`¡Roster "${fileName}" guardado con éxito!`);
             };
 
             const handleFileUpload = (e) => {
@@ -285,14 +300,27 @@
                 reader.onload = (event) => {
                     setRosterText(event.target.result);
                     setPendingFileContent(event.target.result);
+                    setPendingFileName(file.name);
                 };
                 reader.readAsText(file);
             };
 
+            // Borrar un archivo de roster específico y sus turnos asociados
+            const handleDeleteFile = (fileId, fileName) => {
+                if (confirm(`¿Deseas eliminar el roster "${fileName}" y todos sus turnos asociados?`)) {
+                    const remainingTrips = allTrips.filter(t => t.fileToken !== fileId);
+                    const remainingFiles = uploadedFiles.filter(f => f.id !== fileId);
+                    setAllTrips(remainingTrips);
+                    setUploadedFiles(remainingFiles);
+                }
+            };
+
             const handleClearHistory = () => {
-                if (confirm(`¿Deseas vaciar todo el histórico de rosters para ${currentUser}?`)) {
+                if (confirm(`¿Deseas vaciar TODO el histórico de rosters para ${currentUser}?`)) {
                     setAllTrips([]);
+                    setUploadedFiles([]);
                     localStorage.removeItem(`trip_history_${currentUser}`);
+                    localStorage.removeItem(`uploaded_files_${currentUser}`);
                 }
             };
 
@@ -610,7 +638,7 @@
 
                         {allTrips.length > 0 && (
                             <button onClick={handleClearHistory} className="text-red-500 hover:text-red-700 text-xs font-medium underline">
-                                Vaciar histórico de {currentUser} ({allTrips.length})
+                                Vaciar todo el histórico ({allTrips.length})
                             </button>
                         )}
                     </div>
@@ -666,15 +694,48 @@
                         </div>
                     </div>
 
-                    {/* UPLOAD ROSTER */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8">
-                        <h3 className="text-lg font-semibold text-slate-800 mb-2">Añadir Roster al Histórico de {currentUser} (.txt)</h3>
-                        <p className="text-xs text-slate-500 mb-3">Sube tu archivo y selecciona el año en la ventana emergente.</p>
-                        <label className="inline-block bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-5 rounded-xl text-sm cursor-pointer transition-colors shadow-sm mb-3">
-                            📂 Upload Roster
-                            <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
-                        </label>
-                        <textarea rows="2" value={rosterText} onChange={e => setRosterText(e.target.value)} placeholder="O pega el texto del roster aquí..." className="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono bg-slate-50/50"></textarea>
+                    {/* UPLOAD ROSTER & HISTORIAL DE ARCHIVOS DESPLEGABLE */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8 space-y-4">
+                        <div>
+                            <h3 className="text-lg font-semibold text-slate-800 mb-1">Añadir Roster al Histórico de {currentUser} (.txt)</h3>
+                            <p className="text-xs text-slate-500 mb-3">Sube tu archivo y selecciona el año en la ventana emergente.</p>
+                            <label className="inline-block bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-5 rounded-xl text-sm cursor-pointer transition-colors shadow-sm mb-3">
+                                📂 Upload Roster
+                                <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
+                            </label>
+                            <textarea rows="2" value={rosterText} onChange={e => setRosterText(e.target.value)} placeholder="O pega el texto del roster aquí..." className="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono bg-slate-50/50"></textarea>
+                        </div>
+
+                        {/* ACORDEÓN DE ARCHIVOS SUBIDOS */}
+                        {uploadedFiles.length > 0 && (
+                            <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50">
+                                <button 
+                                    onClick={() => setIsFilesOpen(!isFilesOpen)}
+                                    className="w-full p-3.5 flex justify-between items-center text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+                                >
+                                    <span>📁 Historial de Rosters Subidos ({uploadedFiles.length})</span>
+                                    <span>{isFilesOpen ? '▲ Ocultar' : '▼ Ver archivos'}</span>
+                                </button>
+                                {isFilesOpen && (
+                                    <div className="p-3 space-y-2">
+                                        {uploadedFiles.map(file => (
+                                            <div key={file.id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
+                                                <div>
+                                                    <span className="text-xs font-bold text-slate-800 block">📄 {file.name}</span>
+                                                    <span className="text-[10px] text-slate-400">Subido el {file.dateUploaded}</span>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleDeleteFile(file.id, file.name)}
+                                                    className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                                                >
+                                                    🗑️ Borrar roster
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* TABLA DE TRIPS */}
