@@ -1,4 +1,3 @@
-JJJJJJ
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -151,7 +150,7 @@ JJJJJJ
                 return 'partial';
             };
 
-            // Procesador de Roster vinculado al archivo
+            // Procesador de Roster con detección universal de PRL (cualquier número/sufijo)
             const confirmAndProcessRoster = (targetYear) => {
                 const text = pendingFileContent;
                 const fileName = pendingFileName;
@@ -167,7 +166,8 @@ JJJJJJ
                         const columns = line.split('|');
                         columns.forEach(col => {
                             const trimmedCol = col.trim();
-                            const matchPattern = trimmedCol.match(/(\d{2})\/(\d{2})\s+[A-Z]?\s*(SIL\d+|PRL\d+|QF\d+|SBY|SR|AL)/);
+                            // Detecta SIL, cualquier variante de PRL, QF, SBY, SR, AL
+                            const matchPattern = trimmedCol.match(/(\d{2})\/(\d{2})\s+[A-Z]?\s*(SIL\d+|PRL[A-Z0-9]*|QF\d+|SBY|SR|AL)/);
                             if (matchPattern) {
                                 let day = parseInt(matchPattern[1], 10);
                                 let month = parseInt(matchPattern[2], 10);
@@ -251,8 +251,15 @@ JJJJJJ
                         }
                     } else {
                         const isPerth = item.duty.startsWith('PRL') || item.duty === 'QF10' || item.duty === 'QF209';
+                        
+                        const protectionWindowDays = isPerth ? 6 : 4;
+
                         const alreadyAdded = newProcessedTrips.some(t => 
-                            !t.holiday && t.dutyBase === item.duty && t.month === item.month && t.year === item.year && Math.abs(t.day - item.day) <= 4
+                            !t.holiday && 
+                            t.dutyBase === item.duty && 
+                            t.month === item.month && 
+                            t.year === item.year && 
+                            Math.abs(t.day - item.day) < protectionWindowDays
                         );
 
                         if (!alreadyAdded) {
@@ -265,7 +272,7 @@ JJJJJJ
                                 duty: item.duty.substring(0, 5),
                                 dutyBase: item.duty,
                                 type: isPerth ? 'perth' : 'singapore',
-                                count: isPerth ? 4 : 2,
+                                count: isPerth ? 6 : 4,
                                 delay16h: false,
                                 holiday: false,
                                 calledOut: false,
@@ -305,7 +312,6 @@ JJJJJJ
                 reader.readAsText(file);
             };
 
-            // Borrar un archivo de roster específico y sus turnos asociados
             const handleDeleteFile = (fileId, fileName) => {
                 if (confirm(`¿Deseas eliminar el roster "${fileName}" y todos sus turnos asociados?`)) {
                     const remainingTrips = allTrips.filter(t => t.fileToken !== fileId);
@@ -348,14 +354,14 @@ JJJJJJ
                 if (f.holiday) return 0;
                 if (f.type === 'sby') {
                     if (f.calledOut) {
-                        const flightHrs = f.callType === 'perth' ? 25.5 : 26.0;
+                        const flightHrs = f.callType === 'perth' ? 41.4 : 26.0;
                         const standbyPrepHrs = Math.max(0, ((f.count || 1) - 1) * 8.0); 
                         return flightHrs + standbyPrepHrs;
                     } else {
                         return (f.count || 1) * 8.0;
                     }
                 }
-                if (f.type === 'perth') return 25.5;
+                if (f.type === 'perth') return 41.4; 
                 if (f.type === 'singapore') return 26.0;
                 return 0;
             };
