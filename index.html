@@ -150,10 +150,10 @@
                 return 'partial';
             };
 
-            // Procesador de Roster con detección universal de PRL (cualquier número/sufijo)
+            // Procesador de Roster con protección estricta anti-duplicados por fecha
             const confirmAndProcessRoster = (targetYear) => {
                 const text = pendingFileContent;
-                const fileName = pendingFileName;
+                const fileName = pendingFileName || 'Roster.txt';
                 setPendingFileContent(null);
                 setPendingFileName('');
                 if (!text || !text.trim()) return;
@@ -166,7 +166,6 @@
                         const columns = line.split('|');
                         columns.forEach(col => {
                             const trimmedCol = col.trim();
-                            // Detecta SIL, cualquier variante de PRL, QF, SBY, SR, AL
                             const matchPattern = trimmedCol.match(/(\d{2})\/(\d{2})\s+[A-Z]?\s*(SIL\d+|PRL[A-Z0-9]*|QF\d+|SBY|SR|AL)/);
                             if (matchPattern) {
                                 let day = parseInt(matchPattern[1], 10);
@@ -251,18 +250,24 @@
                         }
                     } else {
                         const isPerth = item.duty.startsWith('PRL') || item.duty === 'QF10' || item.duty === 'QF209';
-                        
                         const protectionWindowDays = isPerth ? 6 : 4;
 
-                        const alreadyAdded = newProcessedTrips.some(t => 
+                        // Evitar duplicados dentro del mismo lote o con el historial
+                        const alreadyInBatch = newProcessedTrips.some(t => 
                             !t.holiday && 
-                            t.dutyBase === item.duty && 
                             t.month === item.month && 
                             t.year === item.year && 
                             Math.abs(t.day - item.day) < protectionWindowDays
                         );
 
-                        if (!alreadyAdded) {
+                        const alreadyInHistory = allTrips.some(t => 
+                            !t.holiday && 
+                            t.month === item.month && 
+                            t.year === item.year && 
+                            Math.abs(t.day - item.day) < protectionWindowDays
+                        );
+
+                        if (!alreadyInBatch && !alreadyInHistory) {
                             newProcessedTrips.push({
                                 id: Date.now() + Math.random(),
                                 day: item.day,
@@ -297,7 +302,7 @@
                 setAllTrips(updatedHistory);
                 setUploadedFiles([...uploadedFiles, newFileEntry]);
                 setSelectedPeriod(`10-${targetYear}`);
-                alert(`¡Roster "${fileName}" guardado con éxito!`);
+                alert(`¡Roster "${fileName}" cargado limpia y correctamente!`);
             };
 
             const handleFileUpload = (e) => {
