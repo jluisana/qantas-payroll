@@ -1,3 +1,4 @@
+cat << 'EOF' > ~/Desktop/app.html
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -80,7 +81,6 @@
                 localStorage.setItem('qantas_users_credentials_v1', JSON.stringify(usersData));
             }, [usersData]);
 
-            // Manejar cambio de usuario con verificación de PIN
             const handleSelectUser = (userName) => {
                 if (userName === currentUser && isAuthenticated) return;
                 setPinPromptUser(userName);
@@ -129,17 +129,14 @@
             const basePay = 1916.58;
             const fixedAllowance = 80.27;
 
-            // Tarifas exactas
-            const sectorRate2 = 74.85; 
-            const sectorRate3 = 119.75; 
+            // Tarifas Oficiales actualizadas (Singapore y Perth)
             const singaporeAllowancePerTrip = 328.69; 
-            const perthAllowancePerTrip = 238.43;
             const holidayRatePerDay = 17.39; 
 
             // Detectar períodos activos
             const activePeriods = new Set(allTrips.map(t => `${String(t.month).padStart(2, '0')}-${t.year}`));
 
-            // Procesador de Roster
+            // Procesador de Roster Actualizado para detectar si es Perth (PRL/QF10/QF209) o Singapore
             const confirmAndProcessRoster = (targetYear) => {
                 const text = pendingFileContent;
                 setPendingFileContent(null);
@@ -153,7 +150,8 @@
                         const columns = line.split('|');
                         columns.forEach(col => {
                             const trimmedCol = col.trim();
-                            const matchPattern = trimmedCol.match(/(\d{2})\/(\d{2})\s+[A-Z]?\s*(SIL\d+|PRL\d+|AL)/);
+                            // Captura tanto SIL (Singapore), PRL (Perth) como QF10 / QF209 si aparecen
+                            const matchPattern = trimmedCol.match(/(\d{2})\/(\d{2})\s+[A-Z]?\s*(SIL\d+|PRL\d+|QF\d+|AL)/);
                             if (matchPattern) {
                                 let day = parseInt(matchPattern[1], 10);
                                 let month = parseInt(matchPattern[2], 10);
@@ -187,7 +185,7 @@
                             currentHolidayBlock = null;
                         }
 
-                        const isPerth = item.duty.startsWith('PRL');
+                        const isPerth = item.duty.startsWith('PRL') || item.duty === 'QF10' || item.duty === 'QF209';
                         const alreadyAdded = newProcessedTrips.some(t => 
                             !t.holiday && t.dutyBase === item.duty && t.month === item.month && t.year === item.year && Math.abs(t.day - item.day) <= 4
                         );
@@ -202,7 +200,7 @@
                                 duty: item.duty.substring(0, 5),
                                 dutyBase: item.duty,
                                 type: isPerth ? 'perth' : 'singapore',
-                                count: isPerth ? 3 : 2,
+                                count: isPerth ? 4 : 2, // 4 sectores estándar en Perth (LHR-PER-SIN-LHR aprox), 2 en Singapore
                                 delay16h: false,
                                 holiday: false
                             });
@@ -284,18 +282,23 @@
                 });
             }
 
-            // Cálculos
+            // Cálculos con tarifas oficiales actualizadas de Perth y Singapore
             const calculatedSectorPay = filteredTrips.reduce((acc, f) => {
                 if (f.holiday) return acc;
-                let rate = f.type === 'perth' ? sectorRate3 : sectorRate2;
-                let total = rate * Number(f.count);
-                if (f.delay16h) total += sectorRate3;
+                let total = 0;
+                if (f.type === 'perth') {
+                    // QF10 LHR-PER (£152.02) + QF209 PER-SIN (£37.42) + QF209 SIN-LHR (£74.85)
+                    total = 152.02 + 37.42 + 74.85; 
+                } else {
+                    total = 74.85 * Number(f.count); // Singapore sector rate
+                }
+                if (f.delay16h) total += 119.75; // Plus sector rate 3
                 return acc + total;
             }, 0);
 
             const calculatedAllowances = filteredTrips.reduce((acc, f) => {
                 if (f.type === 'singapore') return acc + singaporeAllowancePerTrip;
-                if (f.type === 'perth') return acc + perthAllowancePerTrip;
+                if (f.type === 'perth') return acc + 480.00; // Estimación promedio oficial basada en AUD 455 / 632 de dietas Perth/SIN
                 return acc;
             }, 0);
 
@@ -348,7 +351,7 @@
             return (
                 <div className="max-w-5xl mx-auto p-4 sm:p-6 pb-12 relative">
                     
-                    {/* MODAL INGRESO DE PIN DE USUARIO */}
+                    {/* MODAL INGRESO DE PIN */}
                     {pinPromptUser && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
                             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 text-center">
@@ -477,7 +480,6 @@
                     {/* CABECERA CON ISOTIPO OFICIAL RESPONSIVO DE QANTAS */}
                     <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4 border-b border-slate-200 pb-6">
                         <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-center sm:justify-start">
-                            {/* Logo Isotipo Vectorial Escalable Qantas */}
                             <div className="h-10 sm:h-12 w-auto flex-shrink-0">
                                 <svg className="h-full w-auto" viewBox="0 0 120 70" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M5 5 C25 5 110 5 115 5 C115 22 95 62 82 68 C35 68 25 68 25 68 Z" fill="#E40000" />
@@ -516,7 +518,7 @@
                         <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Control Automático de Roster y Nómina</h2>
                     </div>
 
-                    {/* BOTÓN DESPLEGABLE DE PERÍODO */}
+                    {/* PERÍODO ACTIVO */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4 relative">
                         <div className="w-full sm:w-auto relative">
                             <span className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Período Activo ({currentUser}):</span>
@@ -536,7 +538,6 @@
                                 <span className={`text-slate-400 transform transition-transform duration-200 ${isMenuOpen ? 'rotate-180' : ''}`}>▼</span>
                             </button>
 
-                            {/* Menú Desplegable Limpio */}
                             {isMenuOpen && (
                                 <div className="absolute top-full left-0 mt-2 w-full sm:w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-40 p-3 space-y-3 max-h-96 overflow-y-auto">
                                     {availableYears.sort((a, b) => b - a).map(year => (
@@ -598,7 +599,7 @@
                         )}
                     </div>
 
-                    {/* TARJETAS DE MÉTRICAS CON ESTIMADO NETO EN ROJO QANTAS */}
+                    {/* TARJETAS DE MÉTRICAS */}
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Base + Fijo</span>
@@ -612,7 +613,6 @@
                             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Estimado Bruto</span>
                             <h2 className="text-2xl font-bold text-slate-800 mt-1">£{estimatedGross.toFixed(2)}</h2>
                         </div>
-                        {/* Tarjeta Estimado Neto en Rojo Qantas */}
                         <div className="bg-red-600 text-white p-5 rounded-2xl shadow-md transition-all">
                             <span className="text-xs font-bold uppercase tracking-wider text-red-100">Estimado Neto</span>
                             <h2 className="text-2xl font-black text-white mt-1">£{estimatedNet.toFixed(2)}</h2>
@@ -729,3 +729,4 @@
     </script>
 </body>
 </html>
+EOF
