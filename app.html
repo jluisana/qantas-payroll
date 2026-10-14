@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Automático de Roster y Nómina - Qantas Tripulante</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- React y Babel -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        function App() {
+            // Usuarios con sus PINs protegidos
+            const [usersData, setUsersData] = React.useState(() => {
+                const saved = localStorage.getItem('qantas_users_credentials_v1');
+                return saved ? JSON.parse(saved) : [
+                    { name: 'Julia', pin: '1234' }
+                ];
+            });
+
+            const [currentUser, setCurrentUser] = React.useState('Julia');
+            const [isAuthenticated, setIsAuthenticated] = React.useState(true);
+            
+            // Modales
+            const [isAddingUser, setIsAddingUser] = React.useState(false);
+            const [newUserName, setNewUserName] = React.useState('');
+            const [newUserPin, setNewUserPin] = React.useState('');
+
+            const [pinPromptUser, setPinPromptUser] = React.useState(null);
+            const [enteredPin, setEnteredPin] = React.useState('');
+
+            const [rosterText, setRosterText] = React.useState('');
+            const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+            const [expandedYear, setExpandedYear] = React.useState('2026');
+            
+            // Modal de año
+            const [pendingFileContent, setPendingFileContent] = React.useState(null);
+            const [selectedModalYear, setSelectedModalYear] = React.useState('2026');
+            
+            // Histórico acumulado por usuario
+            const [allTrips, setAllTrips] = React.useState(() => {
+                const saved = localStorage.getItem(`trip_history_${currentUser}`);
+                if (saved) return JSON.parse(saved);
+                if (currentUser === 'Julia') {
+                    return [
+                        { id: 1, day: 14, month: 7, year: 2026, dateStr: '14/07/2026', duty: 'SIL02', type: 'singapore', count: 2, delay16h: false, holiday: false },
+                        { id: 2, day: 18, month: 7, year: 2026, dateStr: '18/07/2026', duty: 'SIL06', type: 'singapore', count: 2, delay16h: false, holiday: false },
+                        { id: 3, day: 31, month: 7, year: 2026, dateStr: '31/07/2026', duty: 'Vacaciones (AL)', type: 'holiday', count: 10, delay16h: false, holiday: true },
+                        { id: 4, day: 12, month: 8, year: 2026, dateStr: '12/08/2026', duty: 'SIL03', type: 'singapore', count: 2, delay16h: false, holiday: false }
+                    ];
+                }
+                return [];
+            });
+
+            const [selectedPeriod, setSelectedPeriod] = React.useState('08-2026');
+
+            // Cargar datos al cambiar de usuario
+            React.useEffect(() => {
+                if (isAuthenticated) {
+                    const saved = localStorage.getItem(`trip_history_${currentUser}`);
+                    setAllTrips(saved ? JSON.parse(saved) : []);
+                }
+            }, [currentUser, isAuthenticated]);
+
+            // Guardar viajes por usuario
+            React.useEffect(() => {
+                if (isAuthenticated) {
+                    localStorage.setItem(`trip_history_${currentUser}`, JSON.stringify(allTrips));
+                }
+            }, [allTrips, currentUser, isAuthenticated]);
+
+            // Guardar credenciales
+            React.useEffect(() => {
+                localStorage.setItem('qantas_users_credentials_v1', JSON.stringify(usersData));
+            }, [usersData]);
+
+            // Manejar cambio de usuario con verificación de PIN
+            const handleSelectUser = (userName) => {
+                if (userName === currentUser && isAuthenticated) return;
+                setPinPromptUser(userName);
+                setEnteredPin('');
+            };
+
+            const handleVerifyPin = (e) => {
+                e.preventDefault();
+                const userObj = usersData.find(u => u.name === pinPromptUser);
+                if (userObj && userObj.pin === enteredPin) {
+                    setCurrentUser(pinPromptUser);
+                    setIsAuthenticated(true);
+                    setPinPromptUser(null);
+                    setEnteredPin('');
+                } else {
+                    alert('PIN incorrecto. Inténtalo de nuevo.');
+                    setEnteredPin('');
+                }
+            };
+
+            const handleCreateUser = (e) => {
+                e.preventDefault();
+                const trimmedName = newUserName.trim();
+                const trimmedPin = newUserPin.trim();
+
+                if (!trimmedName || !trimmedPin) {
+                    alert('Por favor, introduce nombre y PIN.');
+                    return;
+                }
+
+                if (usersData.some(u => u.name.toLowerCase() === trimmedName.toLowerCase())) {
+                    alert('Este nombre de usuario ya existe.');
+                    return;
+                }
+
+                const newUsers = [...usersData, { name: trimmedName, pin: trimmedPin }];
+                setUsersData(newUsers);
+                setCurrentUser(trimmedName);
+                setIsAuthenticated(true);
+                setNewUserName('');
+                setNewUserPin('');
+                setIsAddingUser(false);
+            };
+
+            // Conceptos Fijos
+            const basePay = 1916.58;
+            const fixedAllowance = 80.27;
+
+            // Tarifas exactas
+            const sectorRate2 = 74.85; 
+            const sectorRate3 = 119.75; 
+            const singaporeAllowancePerTrip = 328.69; 
+            const perthAllowancePerTrip = 238.43;
+            const holidayRatePerDay = 17.39; 
+
+            // Detectar períodos activos
+            const activePeriods = new Set(allTrips.map(t => `${String(t.month).padStart(2, '0')}-${t.year}`));
+
+            // Procesador de Roster
+            const confirmAndProcessRoster = (targetYear) => {
+                const text = pendingFileContent;
+                setPendingFileContent(null);
+                if (!text || !text.trim()) return;
+
+                const lines = text.split(/\r?\n/);
+                let rawDutyList = [];
+
+                lines.forEach(line => {
+                    if (line.includes('|') && line.match(/\b\d{2}\/\d{2}\b/)) {
+                        const columns = line.split('|');
+                        columns.forEach(col => {
+                            const trimmedCol = col.trim();
+                            const matchPattern = trimmedCol.match(/(\d{2})\/(\d{2})\s+[A-Z]?\s*(SIL\d+|PRL\d+|AL)/);
+                            if (matchPattern) {
+                                let day = parseInt(matchPattern[1], 10);
+                                let month = parseInt(matchPattern[2], 10);
+
+                                rawDutyList.push({
+                                    day,
+                                    month,
+                                    year: targetYear,
+                                    dateStr: `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${targetYear}`,
+                                    duty: matchPattern[3]
+                                });
+                            }
+                        });
+                    }
+                });
+
+                if (rawDutyList.length === 0) {
+                    alert('No se pudieron leer los vuelos del archivo.');
+                    return;
+                }
+
+                rawDutyList.sort((a, b) => (a.month !== b.month ? a.month - b.month : a.day - b.day));
+
+                const newProcessedTrips = [];
+                let currentHolidayBlock = null;
+
+                rawDutyList.forEach(item => {
+                    if (item.duty !== 'AL') {
+                        if (currentHolidayBlock) {
+                            newProcessedTrips.push(currentHolidayBlock);
+                            currentHolidayBlock = null;
+                        }
+
+                        const isPerth = item.duty.startsWith('PRL');
+                        const alreadyAdded = newProcessedTrips.some(t => 
+                            !t.holiday && t.dutyBase === item.duty && t.month === item.month && t.year === item.year && Math.abs(t.day - item.day) <= 4
+                        );
+
+                        if (!alreadyAdded) {
+                            newProcessedTrips.push({
+                                id: Date.now() + Math.random(),
+                                day: item.day,
+                                month: item.month,
+                                year: item.year,
+                                dateStr: item.dateStr,
+                                duty: item.duty.substring(0, 5),
+                                dutyBase: item.duty,
+                                type: isPerth ? 'perth' : 'singapore',
+                                count: isPerth ? 3 : 2,
+                                delay16h: false,
+                                holiday: false
+                            });
+                        }
+                    } else {
+                        if (!currentHolidayBlock) {
+                            currentHolidayBlock = {
+                                id: Date.now() + Math.random(),
+                                day: item.day,
+                                month: item.month,
+                                year: item.year,
+                                dateStr: item.dateStr,
+                                duty: 'Vacaciones (AL)',
+                                type: 'holiday',
+                                count: 1,
+                                delay16h: false,
+                                holiday: true
+                            };
+                        } else {
+                            currentHolidayBlock.count += 1;
+                        }
+                    }
+                });
+
+                if (currentHolidayBlock) {
+                    newProcessedTrips.push(currentHolidayBlock);
+                }
+
+                const updatedHistory = [...allTrips];
+                newProcessedTrips.forEach(newItem => {
+                    const exists = updatedHistory.some(existing => existing.dateStr === newItem.dateStr && existing.duty === newItem.duty);
+                    if (!exists) {
+                        updatedHistory.push(newItem);
+                    }
+                });
+
+                updatedHistory.sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month - b.month : a.day - b.day));
+
+                setAllTrips(updatedHistory);
+                setSelectedPeriod(`${String(rawDutyList[0].month).padStart(2, '0')}-${targetYear}`);
+                alert(`¡Roster guardado con éxito para ${currentUser} (${targetYear})! Total elementos: ${updatedHistory.length}.`);
+            };
+
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    setRosterText(event.target.result);
+                    setPendingFileContent(event.target.result);
+                };
+                reader.readAsText(file);
+            };
+
+            const handleClearHistory = () => {
+                if (confirm(`¿Deseas vaciar todo el histórico de rosters para ${currentUser}?`)) {
+                    setAllTrips([]);
+                    localStorage.removeItem(`trip_history_${currentUser}`);
+                }
+            };
+
+            // Filtrado del periodo
+            let filteredTrips = [];
+            if (selectedPeriod === 'all') {
+                filteredTrips = allTrips;
+            } else {
+                const [targetMStr, targetYStr] = selectedPeriod.split('-');
+                const targetM = parseInt(targetMStr, 10);
+                const targetY = parseInt(targetYStr, 10);
+                
+                const prevM = targetM === 1 ? 12 : targetM - 1;
+                const prevY = targetM === 1 ? targetY - 1 : targetY;
+
+                filteredTrips = allTrips.filter(f => {
+                    const m = f.month;
+                    const y = f.year;
+                    const d = f.day;
+                    return (y === prevY && m === prevM && d >= 14) || (y === targetY && m === targetM && d <= 15);
+                });
+            }
+
+            // Cálculos
+            const calculatedSectorPay = filteredTrips.reduce((acc, f) => {
+                if (f.holiday) return acc;
+                let rate = f.type === 'perth' ? sectorRate3 : sectorRate2;
+                let total = rate * Number(f.count);
+                if (f.delay16h) total += sectorRate3;
+                return acc + total;
+            }, 0);
+
+            const calculatedAllowances = filteredTrips.reduce((acc, f) => {
+                if (f.type === 'singapore') return acc + singaporeAllowancePerTrip;
+                if (f.type === 'perth') return acc + perthAllowancePerTrip;
+                return acc;
+            }, 0);
+
+            const calculatedHolidayPay = filteredTrips.reduce((acc, f) => {
+                if (f.holiday) return acc + (f.count * holidayRatePerDay);
+                return acc;
+            }, 0);
+
+            const estimatedGross = basePay + fixedAllowance + calculatedSectorPay + calculatedAllowances + calculatedHolidayPay;
+
+            // Deducciones Dinámicas UK 2026/27
+            const estimatedTax = 367.40;
+            const niThresholdMonthly = 1048.00;
+            let estimatedNI = 0;
+            if (estimatedGross > niThresholdMonthly) {
+                const niSubjectAmount = Math.min(estimatedGross, 4189.00) - niThresholdMonthly;
+                estimatedNI = niSubjectAmount * 0.08;
+            }
+
+            const estimatedPension = 94.63;
+            const totalDeductions = estimatedTax + estimatedNI + estimatedPension;
+            const estimatedNet = estimatedGross - totalDeductions;
+
+            const handleDeleteTrip = (id) => {
+                setAllTrips(allTrips.filter(t => t.id !== id));
+            };
+
+            const toggleDelay = (id) => {
+                setAllTrips(allTrips.map(t => t.id === id ? {...t, delay16h: !t.delay16h} : t));
+            };
+
+            const currentYear = new Date().getFullYear();
+            const availableYears = [];
+            for (let y = 2025; y <= currentYear; y++) {
+                availableYears.push(y);
+            }
+
+            const monthsList = [
+                { m: '01', name: 'Enero' }, { m: '02', name: 'Febrero' }, { m: '03', name: 'Marzo' },
+                { m: '04', name: 'Abril' }, { m: '05', name: 'Mayo' }, { m: '06', name: 'Junio' },
+                { m: '07', name: 'Julio' }, { m: '08', name: 'Agosto' }, { m: '09', name: 'Septiembre' },
+                { m: '10', name: 'Octubre' }, { m: '11', name: 'Noviembre' }, { m: '12', name: 'Diciembre' }
+            ];
+
+            const [targetMShow, targetYShow] = selectedPeriod !== 'all' ? selectedPeriod.split('-') : [null, null];
+            const currentMonthName = targetMShow ? monthsList.find(item => item.m === targetMShow)?.name : '';
+            const currentLabel = selectedPeriod === 'all' ? 'Ver Todos' : `${currentMonthName} ${targetYShow}`;
+            const isCurrentActive = selectedPeriod !== 'all' && activePeriods.has(selectedPeriod);
+
+            return (
+                <div className="max-w-5xl mx-auto p-4 sm:p-6 pb-12 relative">
+                    
+                    {/* MODAL INGRESO DE PIN DE USUARIO */}
+                    {pinPromptUser && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 text-center">
+                                <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-3 font-bold text-xl">
+                                    🔒
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-900 mb-1">Acceso de {pinPromptUser}</h3>
+                                <p className="text-xs text-slate-500 mb-4">Introduce tu PIN privado para ver tus datos:</p>
+                                
+                                <form onSubmit={handleVerifyPin}>
+                                    <input 
+                                        type="password"
+                                        maxLength="6"
+                                        placeholder="••••"
+                                        value={enteredPin}
+                                        onChange={(e) => setEnteredPin(e.target.value)}
+                                        className="w-full border border-slate-300 rounded-xl p-3 text-center text-xl font-bold tracking-widest bg-slate-50 mb-5 outline-none focus:ring-2 focus:ring-red-600"
+                                        autoFocus
+                                    />
+                                    <div className="flex gap-3">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setPinPromptUser(null)}
+                                            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-xl text-sm transition-colors"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button 
+                                            type="submit"
+                                            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm"
+                                        >
+                                            Entrar
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL SELECCIÓN DE AÑO */}
+                    {pendingFileContent && (
+                        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
+                                <h3 className="text-lg font-bold text-slate-900 mb-2">Selecciona el Año del Roster</h3>
+                                <p className="text-xs text-slate-500 mb-4">Elige a qué año corresponde el archivo de <b>{currentUser}</b>:</p>
+                                
+                                <select 
+                                    value={selectedModalYear}
+                                    onChange={(e) => setSelectedModalYear(e.target.value)}
+                                    className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 mb-6"
+                                >
+                                    {availableYears.map(y => (
+                                        <option key={y} value={y}>{y}</option>
+                                    ))}
+                                </select>
+
+                                <div className="flex gap-3">
+                                    <button 
+                                        onClick={() => setPendingFileContent(null)}
+                                        className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-xl text-sm transition-colors"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        onClick={() => confirmAndProcessRoster(parseInt(selectedModalYear, 10))}
+                                        className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm"
+                                    >
+                                        Confirmar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL CREAR NUEVO USUARIO CON PIN */}
+                    {isAddingUser && (
+                        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
+                                <h3 className="text-lg font-bold text-slate-900 mb-2">Añadir Nuevo Tripulante</h3>
+                                <p className="text-xs text-slate-500 mb-4">Crea tu perfil con una clave personal para mantener la privacidad de tus cálculos:</p>
+                                
+                                <form onSubmit={handleCreateUser} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">Nombre:</label>
+                                        <input 
+                                            type="text"
+                                            placeholder="Ej: Carlos"
+                                            value={newUserName}
+                                            onChange={(e) => setNewUserName(e.target.value)}
+                                            className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">PIN Secreto (4 dígitos):</label>
+                                        <input 
+                                            type="password"
+                                            maxLength="6"
+                                            placeholder="Ej: 5678"
+                                            value={newUserPin}
+                                            onChange={(e) => setNewUserPin(e.target.value)}
+                                            className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600"
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-3 pt-2">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setIsAddingUser(false)}
+                                            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-xl text-sm transition-colors"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button 
+                                            type="submit"
+                                            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm"
+                                        >
+                                            Crear Perfil
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* CABECERA CON ISOTIPO OFICIAL RESPONSIVO DE QANTAS */}
+                    <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4 border-b border-slate-200 pb-6">
+                        <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-center sm:justify-start">
+                            {/* Logo Isotipo Vectorial Escalable Qantas */}
+                            <div className="h-10 sm:h-12 w-auto flex-shrink-0">
+                                <svg className="h-full w-auto" viewBox="0 0 120 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M5 5 C25 5 110 5 115 5 C115 22 95 62 82 68 C35 68 25 68 25 68 Z" fill="#E40000" />
+                                    <path d="M26 22 C36 25 52 38 55 45 C57 50 54 52 50 52 C46 52 42 47 39 44 C35 38 27 32 17 28 C14 27 11 25 14 23 C17 21 21 21 26 22 Z" fill="#FFFFFF" />
+                                    <path d="M55 45 C65 42 72 36 75 32 C72 37 65 45 58 48 Z" fill="#FFFFFF" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tighter italic leading-none">QANTAS</h1>
+                                <span className="text-[9px] sm:text-[10px] font-bold text-red-600 tracking-widest uppercase block mt-0.5">Cabincrew Roster & Payroll</span>
+                            </div>
+                        </div>
+
+                        {/* Selector de Perfil Privado */}
+                        <div className="flex items-center gap-2 bg-white p-2 rounded-2xl shadow-xs border border-slate-200 w-full sm:w-auto justify-between sm:justify-start">
+                            <span className="text-xs font-medium text-slate-400 pl-2">Perfil Privado:</span>
+                            <select 
+                                value={currentUser}
+                                onChange={(e) => handleSelectUser(e.target.value)}
+                                className="bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs py-2 px-3 rounded-xl outline-none cursor-pointer"
+                            >
+                                {usersData.map(u => (
+                                    <option key={u.name} value={u.name}>👤 {u.name}</option>
+                                ))}
+                            </select>
+                            <button 
+                                onClick={() => setIsAddingUser(true)}
+                                className="bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs px-3 py-2 rounded-xl transition-colors"
+                            >
+                                + Nuevo
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="text-center mb-8">
+                        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Control Automático de Roster y Nómina</h2>
+                    </div>
+
+                    {/* BOTÓN DESPLEGABLE DE PERÍODO */}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4 relative">
+                        <div className="w-full sm:w-auto relative">
+                            <span className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Período Activo ({currentUser}):</span>
+                            
+                            <button 
+                                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                                className="w-full sm:w-80 bg-slate-50 hover:bg-slate-100 border border-slate-300 font-semibold py-3 px-4 rounded-xl text-sm flex items-center justify-between transition-colors shadow-2xs"
+                            >
+                                <div className="flex items-center gap-2.5">
+                                    {selectedPeriod !== 'all' ? (
+                                        <span className={`w-3 h-3 rounded-full ${isCurrentActive ? 'bg-emerald-500 ring-2 ring-emerald-100' : 'bg-slate-300'}`}></span>
+                                    ) : (
+                                        <span className="text-red-600 font-bold">🔍</span>
+                                    )}
+                                    <span className="text-slate-800">Nómina de {currentLabel}</span>
+                                </div>
+                                <span className={`text-slate-400 transform transition-transform duration-200 ${isMenuOpen ? 'rotate-180' : ''}`}>▼</span>
+                            </button>
+
+                            {/* Menú Desplegable Limpio */}
+                            {isMenuOpen && (
+                                <div className="absolute top-full left-0 mt-2 w-full sm:w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-40 p-3 space-y-3 max-h-96 overflow-y-auto">
+                                    {availableYears.sort((a, b) => b - a).map(year => (
+                                        <div key={year} className="border-b border-slate-100 pb-2 last:border-0">
+                                            <button 
+                                                onClick={() => setExpandedYear(expandedYear === String(year) ? null : String(year))}
+                                                className="w-full flex items-center justify-between text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 p-2.5 rounded-lg transition-colors"
+                                            >
+                                                <span>{year}</span>
+                                                <span>{expandedYear === String(year) ? '▲' : '▼'}</span>
+                                            </button>
+
+                                            {expandedYear === String(year) && (
+                                                <div className="mt-1.5 pl-2 space-y-1">
+                                                    {monthsList.map(monthObj => {
+                                                        const periodKey = `${monthObj.m}-${year}`;
+                                                        const hasData = activePeriods.has(periodKey);
+                                                        const isSelected = selectedPeriod === periodKey;
+                                                        return (
+                                                            <button
+                                                                key={periodKey}
+                                                                onClick={() => {
+                                                                    setSelectedPeriod(periodKey);
+                                                                    setIsMenuOpen(false);
+                                                                }}
+                                                                className={`w-full flex items-center justify-between p-2 rounded-xl text-xs font-medium transition-colors text-left ${
+                                                                    isSelected ? 'bg-red-50 text-red-700 font-bold' : 'hover:bg-slate-50 text-slate-700'
+                                                                }`}
+                                                            >
+                                                                <span>Nómina de {monthObj.name}</span>
+                                                                <span className={`w-3 h-3 rounded-full flex-shrink-0 ${hasData ? 'bg-emerald-500 ring-2 ring-emerald-100' : 'bg-slate-300'}`}></span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+
+                                    <div className="pt-2 border-t border-slate-100">
+                                        <button
+                                            onClick={() => {
+                                                setSelectedPeriod('all');
+                                                setIsMenuOpen(false);
+                                            }}
+                                            className="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-medium hover:bg-slate-50 text-red-600 font-semibold"
+                                        >
+                                            <span>🔍 Ver Todos los Vuelos Acumulados</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {allTrips.length > 0 && (
+                            <button onClick={handleClearHistory} className="text-red-500 hover:text-red-700 text-xs font-medium underline">
+                                Vaciar histórico de {currentUser} ({allTrips.length})
+                            </button>
+                        )}
+                    </div>
+
+                    {/* TARJETAS DE MÉTRICAS CON ESTIMADO NETO EN ROJO QANTAS */}
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Base + Fijo</span>
+                            <h2 className="text-2xl font-bold text-slate-900 mt-1">£{(basePay + fixedAllowance).toFixed(2)}</h2>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Sectores, Dietas & AL</span>
+                            <h2 className="text-2xl font-bold text-red-600 mt-1">£{(calculatedSectorPay + calculatedAllowances + calculatedHolidayPay).toFixed(2)}</h2>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Estimado Bruto</span>
+                            <h2 className="text-2xl font-bold text-slate-800 mt-1">£{estimatedGross.toFixed(2)}</h2>
+                        </div>
+                        {/* Tarjeta Estimado Neto en Rojo Qantas */}
+                        <div className="bg-red-600 text-white p-5 rounded-2xl shadow-md transition-all">
+                            <span className="text-xs font-bold uppercase tracking-wider text-red-100">Estimado Neto</span>
+                            <h2 className="text-2xl font-black text-white mt-1">£{estimatedNet.toFixed(2)}</h2>
+                        </div>
+                    </div>
+
+                    {/* Importador Acumulativo */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8">
+                        <h3 className="text-lg font-semibold text-slate-800 mb-2">Añadir Roster al Histórico de {currentUser} (.txt)</h3>
+                        <p className="text-xs text-slate-500 mb-3">Sube tu archivo y selecciona el año en la ventana emergente.</p>
+                        <label className="inline-block bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-5 rounded-xl text-sm cursor-pointer transition-colors shadow-sm mb-3">
+                            📂 Acumular Archivo de Roster
+                            <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
+                        </label>
+                        <textarea 
+                            rows="2"
+                            value={rosterText}
+                            onChange={e => setRosterText(e.target.value)}
+                            placeholder="O pega el texto del roster aquí..."
+                            className="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono bg-slate-50/50"
+                        ></textarea>
+                    </div>
+
+                    {/* Tabla */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                                <h3 className="text-lg font-semibold text-slate-800">Trips de {currentUser} en este Periodo ({filteredTrips.length})</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse text-sm">
+                                    <thead>
+                                        <tr className="bg-slate-50 text-slate-400 font-medium border-b border-slate-100">
+                                            <th className="p-4">Fecha Inicio</th>
+                                            <th className="p-4">Patrón</th>
+                                            <th className="p-4">Tipo / Detalle</th>
+                                            <th className="p-4">Plus (+16h)</th>
+                                            <th className="p-4 text-right">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {filteredTrips.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="5" className="p-6 text-center text-slate-400">
+                                                    No hay roster cargado para {currentUser} en este periodo. Sube tu archivo .txt arriba.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            filteredTrips.map(f => (
+                                                <tr key={f.id} className="hover:bg-slate-50/50">
+                                                    <td className="p-4 text-slate-600 font-medium">{f.dateStr}</td>
+                                                    <td className="p-4 font-semibold text-slate-800">{f.duty}</td>
+                                                    <td className="p-4 text-slate-600 text-xs">
+                                                        {f.holiday ? (
+                                                            <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-medium">Bloque Vacaciones: {f.count} días (£{(f.count * holidayRatePerDay).toFixed(2)})</span>
+                                                        ) : (
+                                                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded uppercase font-medium">{f.type}</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-4 text-xs">
+                                                        {!f.holiday && (
+                                                            <label className="flex items-center space-x-2 cursor-pointer text-red-600 font-medium">
+                                                                <input type="checkbox" checked={f.delay16h} onChange={() => toggleDelay(f.id)} className="rounded text-red-600" />
+                                                                <span>Aplicar +16h</span>
+                                                            </label>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-4 text-right">
+                                                        <button onClick={() => handleDeleteTrip(f.id)} className="text-red-500 hover:text-red-700 font-medium text-xs">Eliminar</button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* Deducciones */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-800 mb-4">Desglose de Deducciones</h3>
+                                <ul className="space-y-3 text-sm text-slate-600">
+                                    <li className="flex justify-between pb-2 border-b border-slate-100">
+                                        <span>Impuestos (Tax Code 1329L)</span>
+                                        <span className="font-semibold text-slate-800">£{estimatedTax.toFixed(2)}</span>
+                                    </li>
+                                    <li className="flex justify-between pb-2 border-b border-slate-100">
+                                        <div>
+                                            <span className="block font-medium">Seguridad Social (NI Cat A)</span>
+                                            <span className="text-[10px] text-slate-400">8% sobre lo que supere £1,048/mes</span>
+                                        </div>
+                                        <span className="font-semibold text-slate-800">£{estimatedNI.toFixed(2)}</span>
+                                    </li>
+                                    <li className="flex justify-between pb-2 border-b border-slate-100">
+                                        <span>Pensión (Peoples Partner)</span>
+                                        <span className="font-semibold text-slate-800">£{estimatedPension.toFixed(2)}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div className="mt-6 pt-4 border-t border-slate-200 bg-slate-50 p-4 rounded-xl">
+                                <div className="flex justify-between items-center text-sm font-bold text-slate-900">
+                                    <span>Total Deducciones:</span>
+                                    <span className="text-red-600">-£{totalDeductions.toFixed(2)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
