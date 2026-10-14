@@ -47,14 +47,6 @@
             const [allTrips, setAllTrips] = React.useState(() => {
                 const saved = localStorage.getItem(`trip_history_${currentUser}`);
                 if (saved) return JSON.parse(saved);
-                if (currentUser === 'Julia') {
-                    return [
-                        { id: 1, day: 14, month: 7, year: 2026, dateStr: '14/07/2026', duty: 'SIL02', type: 'singapore', count: 2, delay16h: false, holiday: false, calledOut: false },
-                        { id: 2, day: 18, month: 7, year: 2026, dateStr: '18/07/2026', duty: 'SIL06', type: 'singapore', count: 2, delay16h: false, holiday: false, calledOut: false },
-                        { id: 3, day: 31, month: 7, year: 2026, dateStr: '31/07/2026', duty: 'Vacaciones (AL)', type: 'holiday', count: 10, delay16h: false, holiday: true, calledOut: false },
-                        { id: 4, day: 12, month: 8, year: 2026, dateStr: '12/08/2026', duty: 'SIL03', type: 'singapore', count: 2, delay16h: false, holiday: false, calledOut: false }
-                    ];
-                }
                 return [];
             });
 
@@ -131,7 +123,7 @@
             const singaporeAllowancePerTrip = 328.69; 
             const holidayRatePerDay = 17.39; 
 
-            // Evaluación de semáforo
+            // LÓGICA DE SEMÁFORO PRECISA (16 mes anterior - 15 mes activo)
             const getPeriodStatus = (monthStr, yearNum) => {
                 const targetM = parseInt(monthStr, 10);
                 const targetY = yearNum;
@@ -139,18 +131,17 @@
                 const prevM = targetM === 1 ? 12 : targetM - 1;
                 const prevY = targetM === 1 ? targetY - 1 : targetY;
 
-                const firstHalfTrips = allTrips.filter(f => f.year === prevY && f.month === prevM && f.day >= 16);
-                const secondHalfTrips = allTrips.filter(f => f.year === targetY && f.month === targetM && f.day <= 15);
+                // 1ª Mitad: 16 al último día del mes anterior
+                const hasFirstHalf = allTrips.some(f => f.year === prevY && f.month === prevM && f.day >= 16);
+                // 2ª Mitad: 1 al 15 del mes actual
+                const hasSecondHalf = allTrips.some(f => f.year === targetY && f.month === targetM && f.day <= 15);
 
-                const hasFirstHalf = firstHalfTrips.length > 0;
-                const hasSecondHalf = secondHalfTrips.length > 0;
-
-                if (!hasFirstHalf && !hasSecondHalf) return 'empty';
-                if (hasFirstHalf && hasSecondHalf) return 'complete';
-                return 'partial';
+                if (!hasFirstHalf && !hasSecondHalf) return 'empty'; // Gris
+                if (hasFirstHalf && hasSecondHalf) return 'complete'; // Verde
+                return 'partial'; // Naranja
             };
 
-            // Procesador de Roster con bloques SBY unificados
+            // Procesador de Roster
             const confirmAndProcessRoster = (targetYear) => {
                 const text = pendingFileContent;
                 setPendingFileContent(null);
@@ -280,10 +271,10 @@
                     }
                 });
 
-                updatedHistory.sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month !== b.month : a.day - b.day));
+                updatedHistory.sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month - b.month : a.day - b.day));
 
                 setAllTrips(updatedHistory);
-                setSelectedPeriod(`${String(rawDutyList[0].month).padStart(2, '0')}-${targetYear}`);
+                setSelectedPeriod(`10-${targetYear}`);
                 alert(`¡Roster guardado con éxito para ${currentUser} (${targetYear})!`);
             };
 
@@ -325,17 +316,14 @@
                 });
             }
 
-            // Cálculo de Horas de Vuelo (SBY cuenta con ~8h por día de retén si no se llama, o las horas del vuelo si hay Call-out)
             const getTripHours = (f) => {
                 if (f.holiday) return 0;
                 if (f.type === 'sby') {
                     if (f.calledOut) {
-                        // Si hubo llamada, cuenta el vuelo asignado + 8h por cada día previo de retén/standby
                         const flightHrs = f.callType === 'perth' ? 25.5 : 26.0;
                         const standbyPrepHrs = Math.max(0, ((f.count || 1) - 1) * 8.0); 
                         return flightHrs + standbyPrepHrs;
                     } else {
-                        // Standby sin llamada: cuenta aprox 8h de disponibilidad por día
                         return (f.count || 1) * 8.0;
                     }
                 }
@@ -686,7 +674,7 @@
                             📂 Upload Roster
                             <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
                         </label>
-                        <textarea rows="2" value={rosterText} onChange={e => setRosterText(e.target.value)} placeholder="O pega el texto del roster hier..." className="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono bg-slate-50/50"></textarea>
+                        <textarea rows="2" value={rosterText} onChange={e => setRosterText(e.target.value)} placeholder="O pega el texto del roster aquí..." className="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono bg-slate-50/50"></textarea>
                     </div>
 
                     {/* TABLA DE TRIPS */}
@@ -804,4 +792,3 @@
     </script>
 </body>
 </html>
-EOF
