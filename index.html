@@ -262,7 +262,7 @@
                 }
             };
 
-            // Filtrado del periodo
+            // Filtrado del periodo (Nómina)
             let filteredTrips = [];
             if (selectedPeriod === 'all') {
                 filteredTrips = allTrips;
@@ -282,7 +282,50 @@
                 });
             }
 
-            // Cálculos
+            // Cálculo de Horas de Vuelo por tramos estimados
+            const getTripHours = (f) => {
+                if (f.holiday) return 0;
+                if (f.type === 'perth' || (f.type === 'sby' && f.calledOut && f.callType === 'perth')) return 25.5;
+                if (f.type === 'singapore' || (f.type === 'sby' && f.calledOut && f.callType === 'singapore')) return 26.0;
+                return 0;
+            };
+
+            // 1. Rolling Month (Últimos 28 días desde la fecha más reciente registrada o actual)
+            const allTripsSorted = [...allTrips].sort((a, b) => new Date(b.year, b.month - 1, b.day) - new Date(a.year, a.month - 1, a.day));
+            let rollingMonthHours = 0;
+            if (allTripsSorted.length > 0) {
+                const latestTrip = allTripsSorted[0];
+                const latestDate = new Date(latestTrip.year, latestTrip.month - 1, latestTrip.day);
+                const cutoffDate = new Date(latestDate);
+                cutoffDate.setDate(cutoffDate.getDate() - 28);
+
+                rollingMonthHours = allTrips.reduce((acc, f) => {
+                    const tripDate = new Date(f.year, f.month - 1, f.day);
+                    if (tripDate >= cutoffDate && tripDate <= latestDate) {
+                        return acc + getTripHours(f);
+                    }
+                    return acc;
+                }, 0);
+            }
+
+            // 2. Rolling Year (Últimos 365 días desde la fecha más reciente)
+            let rollingYearHours = 0;
+            if (allTripsSorted.length > 0) {
+                const latestTrip = allTripsSorted[0];
+                const latestDate = new Date(latestTrip.year, latestTrip.month - 1, latestTrip.day);
+                const cutoffYearDate = new Date(latestDate);
+                cutoffYearDate.setFullYear(cutoffYearDate.getFullYear() - 1);
+
+                rollingYearHours = allTrips.reduce((acc, f) => {
+                    const tripDate = new Date(f.year, f.month - 1, f.day);
+                    if (tripDate >= cutoffYearDate && tripDate <= latestDate) {
+                        return acc + getTripHours(f);
+                    }
+                    return acc;
+                }, 0);
+            }
+
+            // Cálculos Financieros
             const calculatedSectorPay = filteredTrips.reduce((acc, f) => {
                 if (f.holiday) return acc;
                 let total = 0;
@@ -317,9 +360,7 @@
                 estimatedNI = niSubjectAmount * 0.08;
             }
 
-            // Pensión Dinámica: 5% sobre el Salario Bruto Mensual (Salary Sacrifice)
             const estimatedPension = estimatedGross * 0.05;
-
             const totalDeductions = estimatedTax + estimatedNI + estimatedPension;
             const estimatedNet = estimatedGross - totalDeductions;
 
@@ -525,8 +566,8 @@
                         )}
                     </div>
 
-                    {/* TARJETAS DE MÉTRICAS */}
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+                    {/* TARJETAS DE MÉTRICAS FINANCIERAS */}
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Base + Fijo</span>
                             <h2 className="text-2xl font-bold text-slate-900 mt-1">£{(basePay + fixedAllowance).toFixed(2)}</h2>
@@ -545,6 +586,35 @@
                         </div>
                     </div>
 
+                    {/* TARJETAS DE CONTROL DE HORAS (ROLLING MONTH & ROLLING YEAR) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Horas de Vuelo (Rolling 28 Días)</span>
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${rollingMonthHours > 90 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}>
+                                    {rollingMonthHours.toFixed(1)}h / 100h máx
+                                </span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                <div className={`h-2.5 rounded-full ${rollingMonthHours > 90 ? 'bg-amber-500' : 'bg-red-600'}`} style={{ width: `${Math.min((rollingMonthHours / 100) * 100, 100)}%` }}></div>
+                            </div>
+                            <span className="text-[10px] text-slate-400 mt-2 block">Ventana móvil de 28 días hacia atrás.</span>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Horas de Vuelo (Rolling 365 Días)</span>
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${rollingYearHours > 800 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}>
+                                    {rollingYearHours.toFixed(1)}h / 900h máx
+                                </span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                <div className={`h-2.5 rounded-full ${rollingYearHours > 800 ? 'bg-amber-500' : 'bg-red-600'}`} style={{ width: `${Math.min((rollingYearHours / 900) * 100, 100)}%` }}></div>
+                            </div>
+                            <span className="text-[10px] text-slate-400 mt-2 block">Ventana móvil de 12 meses hacia atrás.</span>
+                        </div>
+                    </div>
+
                     {/* UPLOAD ROSTER */}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8">
                         <h3 className="text-lg font-semibold text-slate-800 mb-2">Añadir Roster al Histórico de {currentUser} (.txt)</h3>
@@ -556,7 +626,7 @@
                         <textarea rows="2" value={rosterText} onChange={e => setRosterText(e.target.value)} placeholder="O pega el texto del roster aquí..." className="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono bg-slate-50/50"></textarea>
                     </div>
 
-                    {/* TABLA CON SOPORTE SBY (CALL-OUT) */}
+                    {/* TABLA DE TRIPS */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                             <div className="p-6 border-b border-slate-100 flex justify-between items-center">
@@ -601,4 +671,72 @@
                                                                 )}
                                                             </div>
                                                         ) : (
-                                                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5
+                                                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded uppercase font-medium">{f.type}</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-4 text-xs">
+                                                        {f.type === 'sby' ? (
+                                                            <label className="flex items-center space-x-2 cursor-pointer text-emerald-600 font-bold">
+                                                                <input type="checkbox" checked={f.calledOut} onChange={() => toggleCallOut(f.id)} className="rounded text-emerald-600" />
+                                                                <span>Call-out (¿Llamaron?)</span>
+                                                            </label>
+                                                        ) : !f.holiday ? (
+                                                            <label className="flex items-center space-x-2 cursor-pointer text-red-600 font-medium">
+                                                                <input type="checkbox" checked={f.delay16h} onChange={() => toggleDelay(f.id)} className="rounded text-red-600" />
+                                                                <span>Aplicar +16h</span>
+                                                            </label>
+                                                        ) : null}
+                                                    </td>
+                                                    <td className="p-4 text-right">
+                                                        <button onClick={() => handleDeleteTrip(f.id)} className="text-red-500 hover:text-red-700 font-medium text-xs">Eliminar</button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* DEDUCCIONES */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-800 mb-4">Desglose de Deducciones</h3>
+                                <ul className="space-y-3 text-sm text-slate-600">
+                                    <li className="flex justify-between pb-2 border-b border-slate-100">
+                                        <span>Impuestos (Tax Code 1329L)</span>
+                                        <span className="font-semibold text-slate-800">£{estimatedTax.toFixed(2)}</span>
+                                    </li>
+                                    <li className="flex justify-between pb-2 border-b border-slate-100">
+                                        <div>
+                                            <span className="block font-medium">Seguridad Social (NI Cat A)</span>
+                                            <span className="text-[10px] text-slate-400">8% sobre lo que supere £1,048/mes</span>
+                                        </div>
+                                        <span className="font-semibold text-slate-800">£{estimatedNI.toFixed(2)}</span>
+                                    </li>
+                                    <li className="flex justify-between pb-2 border-b border-slate-100">
+                                        <div>
+                                            <span className="block font-medium">Pensión (People's Pension)</span>
+                                            <span className="text-[10px] text-slate-400">5% Salary Sacrifice (variable)</span>
+                                        </div>
+                                        <span className="font-semibold text-slate-800">£{estimatedPension.toFixed(2)}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div className="mt-6 pt-4 border-t border-slate-200 bg-slate-50 p-4 rounded-xl">
+                                <div className="flex justify-between items-center text-sm font-bold text-slate-900">
+                                    <span>Total Deducciones:</span>
+                                    <span className="text-red-600">-£{totalDeductions.toFixed(2)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
+EOF
