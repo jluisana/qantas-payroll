@@ -131,7 +131,7 @@
             const singaporeAllowancePerTrip = 328.69; 
             const holidayRatePerDay = 17.39; 
 
-            // Función Semáforo para evaluar la cobertura de un período (16 del mes anterior al 15 del mes actual)
+            // LÓGICA REVISADA DEL SEMÁFORO 🚦
             const getPeriodStatus = (monthStr, yearNum) => {
                 const targetM = parseInt(monthStr, 10);
                 const targetY = yearNum;
@@ -139,24 +139,18 @@
                 const prevM = targetM === 1 ? 12 : targetM - 1;
                 const prevY = targetM === 1 ? targetY - 1 : targetY;
 
-                // Filtrar viajes que caen en este período
-                const periodTrips = allTrips.filter(f => {
-                    const m = f.month;
-                    const y = f.year;
-                    const d = f.day;
-                    return (y === prevY && m === prevM && d >= 16) || (y === targetY && m === targetM && d <= 15);
-                });
+                // 1. Obtener viajes de la 1ª mitad (del 16 al final del mes anterior)
+                const firstHalfTrips = allTrips.filter(f => f.year === prevY && f.month === prevM && f.day >= 16);
 
-                if (periodTrips.length === 0) return 'empty'; // Gris
+                // 2. Obtener viajes de la 2ª mitad (del 1 al 15 del mes de la nómina)
+                const secondHalfTrips = allTrips.filter(f => f.year === targetY && f.month === targetM && f.day <= 15);
 
-                // Verificar cobertura de ambas mitades:
-                // Primera mitad: del 16 al 30/31 del mes anterior
-                const hasFirstHalf = periodTrips.some(f => f.year === prevY && f.month === prevM && f.day >= 16);
-                // Segunda mitad: del 1 al 15 del mes de la nómina
-                const hasSecondHalf = periodTrips.some(f => f.year === targetY && f.month === targetM && f.day <= 15);
+                const hasFirstHalf = firstHalfTrips.length > 0;
+                const hasSecondHalf = secondHalfTrips.length > 0;
 
+                if (!hasFirstHalf && !hasSecondHalf) return 'empty'; // Gris
                 if (hasFirstHalf && hasSecondHalf) return 'complete'; // Verde
-                return 'partial'; // Naranja
+                return 'partial'; // Naranja (Si solo tiene una mitad)
             };
 
             // Procesador de Roster
@@ -288,7 +282,7 @@
                 }
             };
 
-            // Filtrado del periodo (Nómina: 16 del mes anterior al 15 del mes activo)
+            // Filtrado del periodo (Nómina)
             let filteredTrips = [];
             if (selectedPeriod === 'all') {
                 filteredTrips = allTrips;
@@ -660,120 +654,4 @@
                             📂 Upload Roster
                             <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
                         </label>
-                        <textarea rows="2" value={rosterText} onChange={e => setRosterText(e.target.value)} placeholder="O pega el texto del roster aquí..." className="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono bg-slate-50/50"></textarea>
-                    </div>
-
-                    {/* TABLA DE TRIPS */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                                <h3 className="text-lg font-semibold text-slate-800">Trips de {currentUser} en este Periodo ({filteredTrips.length})</h3>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-sm">
-                                    <thead>
-                                        <tr className="bg-slate-50 text-slate-400 font-medium border-b border-slate-100">
-                                            <th className="p-4">Fecha Inicio</th>
-                                            <th className="p-4">Patrón</th>
-                                            <th className="p-4">Tipo / Detalle</th>
-                                            <th className="p-4">Opciones</th>
-                                            <th className="p-4 text-right">Acción</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {filteredTrips.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="5" className="p-6 text-center text-slate-400">
-                                                    No hay roster cargado para {currentUser} en este periodo. Sube tu archivo .txt arriba.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            filteredTrips.map(f => (
-                                                <tr key={f.id} className="hover:bg-slate-50/50">
-                                                    <td className="p-4 text-slate-600 font-medium">{f.dateStr}</td>
-                                                    <td className="p-4 font-semibold text-slate-800">{f.duty}</td>
-                                                    <td className="p-4 text-slate-600 text-xs">
-                                                        {f.holiday ? (
-                                                            <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-medium">Bloque Vacaciones: {f.count} días (£{(f.count * holidayRatePerDay).toFixed(2)})</span>
-                                                        ) : f.type === 'sby' ? (
-                                                            <div className="space-y-1">
-                                                                <span className={`px-2 py-0.5 rounded font-semibold inline-block ${f.calledOut ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                                                                    {f.calledOut ? `Activado: Vuelo ${f.callType.toUpperCase()}` : 'Standby (Sin llamada)'}
-                                                                </span>
-                                                                {f.calledOut && (
-                                                                    <div className="flex gap-1 pt-1">
-                                                                        <button onClick={() => setSbyCallType(f.id, 'singapore')} className={`text-[10px] px-1.5 py-0.5 rounded ${f.callType === 'singapore' ? 'bg-red-600 text-white font-bold' : 'bg-slate-200 text-slate-700'}`}>SIN</button>
-                                                                        <button onClick={() => setSbyCallType(f.id, 'perth')} className={`text-[10px] px-1.5 py-0.5 rounded ${f.callType === 'perth' ? 'bg-red-600 text-white font-bold' : 'bg-slate-200 text-slate-700'}`}>PER</button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded uppercase font-medium">{f.type}</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-4 text-xs">
-                                                        {f.type === 'sby' ? (
-                                                            <label className="flex items-center space-x-2 cursor-pointer text-emerald-600 font-bold">
-                                                                <input type="checkbox" checked={f.calledOut} onChange={() => toggleCallOut(f.id)} className="rounded text-emerald-600" />
-                                                                <span>Call-out (¿Llamaron?)</span>
-                                                            </label>
-                                                        ) : !f.holiday ? (
-                                                            <label className="flex items-center space-x-2 cursor-pointer text-red-600 font-medium">
-                                                                <input type="checkbox" checked={f.delay16h} onChange={() => toggleDelay(f.id)} className="rounded text-red-600" />
-                                                                <span>Aplicar +16h</span>
-                                                            </label>
-                                                        ) : null}
-                                                    </td>
-                                                    <td className="p-4 text-right">
-                                                        <button onClick={() => handleDeleteTrip(f.id)} className="text-red-500 hover:text-red-700 font-medium text-xs">Eliminar</button>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        {/* DEDUCCIONES */}
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold text-slate-800 mb-4">Desglose de Deducciones</h3>
-                                <ul className="space-y-3 text-sm text-slate-600">
-                                    <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <span>Impuestos (Tax Code 1329L)</span>
-                                        <span className="font-semibold text-slate-800">£{estimatedTax.toFixed(2)}</span>
-                                    </li>
-                                    <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <div>
-                                            <span className="block font-medium">Seguridad Social (NI Cat A)</span>
-                                            <span className="text-[10px] text-slate-400">8% sobre lo que supere £1,048/mes</span>
-                                        </div>
-                                        <span className="font-semibold text-slate-800">£{estimatedNI.toFixed(2)}</span>
-                                    </li>
-                                    <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <div>
-                                            <span className="block font-medium">Pensión (People's Pension)</span>
-                                            <span className="text-[10px] text-slate-400">5% Salary Sacrifice (variable)</span>
-                                        </div>
-                                        <span className="font-semibold text-slate-800">£{estimatedPension.toFixed(2)}</span>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div className="mt-6 pt-4 border-t border-slate-200 bg-slate-50 p-4 rounded-xl">
-                                <div className="flex justify-between items-center text-sm font-bold text-slate-900">
-                                    <span>Total Deducciones:</span>
-                                    <span className="text-red-600">-£{totalDeductions.toFixed(2)}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-    </script>
-</body>
-</html>
-EOF
+                        <textarea rows="2" value={rosterText} onChange={e => setRosterText(e.target.value)}
