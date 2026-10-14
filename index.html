@@ -16,7 +16,6 @@
 
     <script type="text/babel">
         function App() {
-            // Usuarios con PINs protegidos
             const [usersData, setUsersData] = React.useState(() => {
                 const saved = localStorage.getItem('qantas_users_credentials_v1');
                 return saved ? JSON.parse(saved) : [
@@ -27,7 +26,6 @@
             const [currentUser, setCurrentUser] = React.useState('Julia');
             const [isAuthenticated, setIsAuthenticated] = React.useState(true);
             
-            // Modales
             const [isAddingUser, setIsAddingUser] = React.useState(false);
             const [newUserName, setNewUserName] = React.useState('');
             const [newUserPin, setNewUserPin] = React.useState('');
@@ -40,12 +38,10 @@
             const [isFilesOpen, setIsFilesOpen] = React.useState(false);
             const [expandedYear, setExpandedYear] = React.useState('2026');
             
-            // Modal de año
             const [pendingFileContent, setPendingFileContent] = React.useState(null);
             const [pendingFileName, setPendingFileName] = React.useState('');
             const [selectedModalYear, setSelectedModalYear] = React.useState('2026');
             
-            // Histórico acumulado por usuario y lista de archivos subidos
             const [allTrips, setAllTrips] = React.useState(() => {
                 const saved = localStorage.getItem(`trip_history_${currentUser}`);
                 if (saved) return JSON.parse(saved);
@@ -60,7 +56,6 @@
 
             const [selectedPeriod, setSelectedPeriod] = React.useState('10-2026');
 
-            // Cargar datos al cambiar de usuario
             React.useEffect(() => {
                 if (isAuthenticated) {
                     const savedTrips = localStorage.getItem(`trip_history_${currentUser}`);
@@ -70,7 +65,6 @@
                 }
             }, [currentUser, isAuthenticated]);
 
-            // Guardar datos por usuario
             React.useEffect(() => {
                 if (isAuthenticated) {
                     localStorage.setItem(`trip_history_${currentUser}`, JSON.stringify(allTrips));
@@ -78,7 +72,6 @@
                 }
             }, [allTrips, uploadedFiles, currentUser, isAuthenticated]);
 
-            // Guardar credenciales
             React.useEffect(() => {
                 localStorage.setItem('qantas_users_credentials_v1', JSON.stringify(usersData));
             }, [usersData]);
@@ -127,14 +120,11 @@
                 setIsAddingUser(false);
             };
 
-            // Conceptos Fijos
             const basePay = 1916.58;
             const fixedAllowance = 80.27;
-
             const singaporeAllowancePerTrip = 328.69; 
             const holidayRatePerDay = 17.39; 
 
-            // Evaluación de semáforo
             const getPeriodStatus = (monthStr, yearNum) => {
                 const targetM = parseInt(monthStr, 10);
                 const targetY = yearNum;
@@ -150,7 +140,6 @@
                 return 'partial';
             };
 
-            // PROCESADOR DE ROSTER CON FILTRADO STRICTO ANTI-DUPLICADOS DE PERTH / SINGAPUR
             const confirmAndProcessRoster = (targetYear) => {
                 const text = pendingFileContent;
                 const fileName = pendingFileName || 'Roster.txt';
@@ -161,13 +150,11 @@
                 const lines = text.split(/\r?\n/);
                 let rawDutyList = [];
 
-                // Solo procesar las líneas que forman parte de la tabla de turnos principal (evitar duplicar con leyendas o pies de página)
                 lines.forEach(line => {
                     if (line.includes('|') && line.match(/\b\d{2}\/\d{2}\b/)) {
                         const columns = line.split('|');
                         columns.forEach(col => {
                             const trimmedCol = col.trim();
-                            // Captura SIL, PRL (cualquier número/variante), QF, SBY, SR, AL
                             const matchPattern = trimmedCol.match(/(\d{2})\/(\d{2})\s+[A-Z]?\s*(SIL\d+|PRL[A-Z0-9]*|QF\d+|SBY|SR|AL)/);
                             if (matchPattern) {
                                 let day = parseInt(matchPattern[1], 10);
@@ -195,7 +182,6 @@
                 const newProcessedTrips = [];
                 let currentHolidayBlock = null;
                 let currentSbyBlock = null;
-
                 const fileToken = `${fileName}_${Date.now()}`;
 
                 rawDutyList.forEach(item => {
@@ -252,11 +238,10 @@
                         }
                     } else {
                         const isPerth = item.duty.startsWith('PRL') || item.duty === 'QF10' || item.duty === 'QF209';
-                        
-                        // Si es Perth, se protege un bloque de 6 días completos alrededor de esa fecha
                         const windowDays = isPerth ? 6 : 4;
 
-                        const existsInCurrentBatch = newProcessedTrips.some(t => 
+                        // Validación estricta para evitar solapes de la misma rotación
+                        const existsInBatch = newProcessedTrips.some(t => 
                             !t.holiday && 
                             t.month === item.month && 
                             t.year === item.year && 
@@ -270,7 +255,7 @@
                             Math.abs(t.day - item.day) < windowDays
                         );
 
-                        if (!existsInCurrentBatch && !existsInHistory) {
+                        if (!existsInBatch && !existsInHistory) {
                             newProcessedTrips.push({
                                 id: Date.now() + Math.random(),
                                 day: item.day,
@@ -305,7 +290,7 @@
                 setAllTrips(updatedHistory);
                 setUploadedFiles([...uploadedFiles, newFileEntry]);
                 setSelectedPeriod(`10-${targetYear}`);
-                alert(`¡Roster "${fileName}" cargado correctamente sin duplicados!`);
+                alert(`¡Roster "${fileName}" cargado correctamente!`);
             };
 
             const handleFileUpload = (e) => {
@@ -338,7 +323,6 @@
                 }
             };
 
-            // Filtrado del periodo
             let filteredTrips = [];
             if (selectedPeriod === 'all') {
                 filteredTrips = allTrips;
@@ -374,7 +358,6 @@
                 return 0;
             };
 
-            // Rolling Month
             const allTripsSorted = [...allTrips].sort((a, b) => new Date(b.year, b.month - 1, b.day) - new Date(a.year, a.month - 1, a.day));
             let rollingMonthHours = 0;
             if (allTripsSorted.length > 0) {
@@ -392,7 +375,6 @@
                 }, 0);
             }
 
-            // Rolling Year
             let rollingYearHours = 0;
             if (allTripsSorted.length > 0) {
                 const latestTrip = allTripsSorted[0];
@@ -494,7 +476,6 @@
             return (
                 <div className="max-w-5xl mx-auto p-4 sm:p-6 pb-12 relative">
                     
-                    {/* MODAL PIN */}
                     {pinPromptUser && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
                             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 text-center">
@@ -520,7 +501,6 @@
                         </div>
                     )}
 
-                    {/* MODAL AÑO */}
                     {pendingFileContent && (
                         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
                             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
@@ -543,7 +523,6 @@
                         </div>
                     )}
 
-                    {/* MODAL NUEVO USUARIO */}
                     {isAddingUser && (
                         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
                             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
@@ -567,7 +546,6 @@
                         </div>
                     )}
 
-                    {/* CABECERA */}
                     <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4 border-b border-slate-200 pb-6">
                         <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-center sm:justify-start">
                             <div className="h-10 sm:h-12 w-auto flex-shrink-0">
@@ -596,7 +574,6 @@
                         <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Control Automático de Roster y Nómina</h2>
                     </div>
 
-                    {/* PERÍODO ACTIVO CON SEMÁFORO 🚦 */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4 relative">
                         <div className="w-full sm:w-auto relative">
                             <span className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Período Activo ({currentUser}):</span>
@@ -657,7 +634,6 @@
                         )}
                     </div>
 
-                    {/* TARJETAS DE MÉTRICAS FINANCIERAS */}
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Base + Fijo</span>
@@ -679,7 +655,6 @@
                         </div>
                     </div>
 
-                    {/* TARJETAS DE CONTROL DE HORAS */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                             <div className="flex justify-between items-center mb-2">
@@ -691,7 +666,6 @@
                             <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
                                 <div className={`h-2.5 rounded-full ${rollingMonthHours > 90 ? 'bg-amber-500' : 'bg-red-600'}`} style={{ width: `${Math.min((rollingMonthHours / 100) * 100, 100)}%` }}></div>
                             </div>
-                            <span className="text-[10px] text-slate-400 mt-2 block">Ventana móvil de 28 días hacia atrás.</span>
                         </div>
 
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
@@ -704,11 +678,9 @@
                             <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
                                 <div className={`h-2.5 rounded-full ${rollingYearHours > 800 ? 'bg-amber-500' : 'bg-red-600'}`} style={{ width: `${Math.min((rollingYearHours / 900) * 100, 100)}%` }}></div>
                             </div>
-                            <span className="text-[10px] text-slate-400 mt-2 block">Ventana móvil de 12 meses hacia atrás.</span>
                         </div>
                     </div>
 
-                    {/* UPLOAD ROSTER & HISTORIAL DE ARCHIVOS DESPLEGABLE */}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8 space-y-4">
                         <div>
                             <h3 className="text-lg font-semibold text-slate-800 mb-1">Añadir Roster al Histórico de {currentUser} (.txt)</h3>
@@ -720,7 +692,6 @@
                             <textarea rows="2" value={rosterText} onChange={e => setRosterText(e.target.value)} placeholder="O pega el texto del roster aquí..." className="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono bg-slate-50/50"></textarea>
                         </div>
 
-                        {/* ACORDEÓN DE ARCHIVOS SUBIDOS */}
                         {uploadedFiles.length > 0 && (
                             <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50">
                                 <button 
@@ -752,7 +723,6 @@
                         )}
                     </div>
 
-                    {/* TABLA DE TRIPS */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                             <div className="p-6 border-b border-slate-100 flex justify-between items-center">
@@ -826,7 +796,6 @@
                             </div>
                         </div>
 
-                        {/* DEDUCCIONES */}
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
                             <div>
                                 <h3 className="text-lg font-semibold text-slate-800 mb-4">Desglose de Deducciones</h3>
