@@ -133,7 +133,7 @@
 
             const activePeriods = new Set(allTrips.map(t => `${String(t.month).padStart(2, '0')}-${t.year}`));
 
-            // Procesador de Roster (Detecta SIL, PRL y SBY)
+            // Procesador de Roster
             const confirmAndProcessRoster = (targetYear) => {
                 const text = pendingFileContent;
                 setPendingFileContent(null);
@@ -147,7 +147,6 @@
                         const columns = line.split('|');
                         columns.forEach(col => {
                             const trimmedCol = col.trim();
-                            // Detecta SIL, PRL, QF y también SBY
                             const matchPattern = trimmedCol.match(/(\d{2})\/(\d{2})\s+[A-Z]?\s*(SIL\d+|PRL\d+|QF\d+|SBY|AL)/);
                             if (matchPattern) {
                                 let day = parseInt(matchPattern[1], 10);
@@ -238,7 +237,7 @@
                     }
                 });
 
-                updatedHistory.sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month - b.month : a.day - b.day));
+                updatedHistory.sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month !== b.month : a.day - b.day));
 
                 setAllTrips(updatedHistory);
                 setSelectedPeriod(`${String(rawDutyList[0].month).padStart(2, '0')}-${targetYear}`);
@@ -283,7 +282,7 @@
                 });
             }
 
-            // Cálculos (Suman si el SBY fue activado por llamada)
+            // Cálculos
             const calculatedSectorPay = filteredTrips.reduce((acc, f) => {
                 if (f.holiday) return acc;
                 let total = 0;
@@ -318,7 +317,9 @@
                 estimatedNI = niSubjectAmount * 0.08;
             }
 
-            const estimatedPension = 94.63;
+            // Pensión Dinámica: 5% sobre el Salario Bruto Mensual (Salary Sacrifice)
+            const estimatedPension = estimatedGross * 0.05;
+
             const totalDeductions = estimatedTax + estimatedNI + estimatedPension;
             const estimatedNet = estimatedGross - totalDeductions;
 
@@ -330,7 +331,6 @@
                 setAllTrips(allTrips.map(t => t.id === id ? {...t, delay16h: !t.delay16h} : t));
             };
 
-            // Activar o desactivar el SBY si llaman a volar
             const toggleCallOut = (id) => {
                 setAllTrips(allTrips.map(t => {
                     if (t.id === id) {
@@ -338,7 +338,7 @@
                         return {
                             ...t,
                             calledOut: nextCalled,
-                            callType: nextCalled ? 'singapore' : null // Por defecto asigna Singapur al activarlo, editable si se desea
+                            callType: nextCalled ? 'singapore' : null
                         };
                     }
                     return t;
@@ -601,69 +601,4 @@
                                                                 )}
                                                             </div>
                                                         ) : (
-                                                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded uppercase font-medium">{f.type}</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-4 text-xs">
-                                                        {f.type === 'sby' ? (
-                                                            <label className="flex items-center space-x-2 cursor-pointer text-emerald-600 font-bold">
-                                                                <input type="checkbox" checked={f.calledOut} onChange={() => toggleCallOut(f.id)} className="rounded text-emerald-600" />
-                                                                <span>Call-out (¿Llamaron?)</span>
-                                                            </label>
-                                                        ) : !f.holiday ? (
-                                                            <label className="flex items-center space-x-2 cursor-pointer text-red-600 font-medium">
-                                                                <input type="checkbox" checked={f.delay16h} onChange={() => toggleDelay(f.id)} className="rounded text-red-600" />
-                                                                <span>Aplicar +16h</span>
-                                                            </label>
-                                                        ) : null}
-                                                    </td>
-                                                    <td className="p-4 text-right">
-                                                        <button onClick={() => handleDeleteTrip(f.id)} className="text-red-500 hover:text-red-700 font-medium text-xs">Eliminar</button>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        {/* DEDUCCIONES */}
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold text-slate-800 mb-4">Desglose de Deducciones</h3>
-                                <ul className="space-y-3 text-sm text-slate-600">
-                                    <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <span>Impuestos (Tax Code 1329L)</span>
-                                        <span className="font-semibold text-slate-800">£{estimatedTax.toFixed(2)}</span>
-                                    </li>
-                                    <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <div>
-                                            <span className="block font-medium">Seguridad Social (NI Cat A)</span>
-                                            <span className="text-[10px] text-slate-400">8% sobre lo que supere £1,048/mes</span>
-                                        </div>
-                                        <span className="font-semibold text-slate-800">£{estimatedNI.toFixed(2)}</span>
-                                    </li>
-                                    <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <span>Pensión (Peoples Partner)</span>
-                                        <span className="font-semibold text-slate-800">£{estimatedPension.toFixed(2)}</span>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div className="mt-6 pt-4 border-t border-slate-200 bg-slate-50 p-4 rounded-xl">
-                                <div className="flex justify-between items-center text-sm font-bold text-slate-900">
-                                    <span>Total Deducciones:</span>
-                                    <span className="text-red-600">-£{totalDeductions.toFixed(2)}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-    </script>
-</body>
-</html>
-EOF
+                                                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5
