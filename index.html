@@ -54,7 +54,7 @@
                 return [];
             });
 
-            const [selectedPeriod, setSelectedPeriod] = React.useState('10-2026');
+            const [selectedPeriod, setSelectedPeriod] = React.useState('08-2026');
 
             React.useEffect(() => {
                 if (isAuthenticated) {
@@ -125,6 +125,15 @@
             const singaporeAllowancePerTrip = 328.69; 
             const holidayRatePerDay = 17.39; 
 
+            // Función para calcular la fecha final del trip
+            const getTripEndDate = (trip) => {
+                const startDate = new Date(trip.year, trip.month - 1, trip.day);
+                const durationDays = trip.holiday ? (trip.count || 1) : (trip.type === 'perth' ? 6 : 4);
+                const endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + (durationDays - 1));
+                return endDate;
+            };
+
             const getPeriodStatus = (monthStr, yearNum) => {
                 const targetM = parseInt(monthStr, 10);
                 const targetY = yearNum;
@@ -132,8 +141,15 @@
                 const prevM = targetM === 1 ? 12 : targetM - 1;
                 const prevY = targetM === 1 ? targetY - 1 : targetY;
 
-                const hasFirstHalf = allTrips.some(f => f.year === prevY && f.month === prevM && f.day >= 16);
-                const hasSecondHalf = allTrips.some(f => f.year === targetY && f.month === targetM && f.day >= 2 && f.day <= 15);
+                const hasFirstHalf = allTrips.some(f => {
+                    const endDate = getTripEndDate(f);
+                    return endDate.getFullYear() === prevY && (endDate.getMonth() + 1) === prevM && endDate.getDate() >= 16;
+                });
+
+                const hasSecondHalf = allTrips.some(f => {
+                    const endDate = getTripEndDate(f);
+                    return endDate.getFullYear() === targetY && (endDate.getMonth() + 1) === targetM && endDate.getDate() >= 2 && endDate.getDate() <= 15;
+                });
 
                 if (!hasFirstHalf && !hasSecondHalf) return 'empty';
                 if (hasFirstHalf && hasSecondHalf) return 'complete';
@@ -240,7 +256,6 @@
                         const isPerth = item.duty.startsWith('PRL') || item.duty === 'QF10' || item.duty === 'QF209';
                         const windowDays = isPerth ? 6 : 4;
 
-                        // Validación estricta para evitar solapes de la misma rotación
                         const existsInBatch = newProcessedTrips.some(t => 
                             !t.holiday && 
                             t.month === item.month && 
@@ -289,7 +304,7 @@
 
                 setAllTrips(updatedHistory);
                 setUploadedFiles([...uploadedFiles, newFileEntry]);
-                setSelectedPeriod(`10-${targetYear}`);
+                setSelectedPeriod(`08-${targetYear}`);
                 alert(`¡Roster "${fileName}" cargado correctamente!`);
             };
 
@@ -323,6 +338,7 @@
                 }
             };
 
+            // Filtrado del periodo basado en la FECHA DE ATERRIZAJE O FINALIZACIÓN DEL TRIP
             let filteredTrips = [];
             if (selectedPeriod === 'all') {
                 filteredTrips = allTrips;
@@ -335,10 +351,12 @@
                 const prevY = targetM === 1 ? targetY - 1 : targetY;
 
                 filteredTrips = allTrips.filter(f => {
-                    const m = f.month;
-                    const y = f.year;
-                    const d = f.day;
-                    return (y === prevY && m === prevM && d >= 16) || (y === targetY && m === targetM && d <= 15);
+                    const endDate = getTripEndDate(f);
+                    const endM = endDate.getMonth() + 1;
+                    const endY = endDate.getFullYear();
+                    const endD = endDate.getDate();
+
+                    return (endY === prevY && endM === prevM && endD >= 16) || (endY === targetY && endM === targetM && endD <= 15);
                 });
             }
 
