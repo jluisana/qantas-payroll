@@ -1,4 +1,3 @@
-HHHHHHHHHHH---------
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -56,7 +55,7 @@ HHHHHHHHHHH---------
                 return [];
             });
 
-            const [selectedPeriod, setSelectedPeriod] = React.useState('02-2026');
+            const [selectedPeriod, setSelectedPeriod] = React.useState('08-2026');
 
             React.useEffect(() => {
                 if (isAuthenticated) {
@@ -122,9 +121,11 @@ HHHHHHHHHHH---------
                 setIsAddingUser(false);
             };
 
+            // CONCEPTOS CONTRACTUALES Y TARIFAS PAYSYSTEM DEDUCIDAS DE TUS PAYSLIPS REALES
             const basePay = 1916.58;
             const fixedAllowance = 80.27;
-            const singaporeAllowancePerTrip = 328.69; 
+            const singaporeAllowancePerTrip = 421.32; // Promedio exacto del desglose Brkfst + Lunch + Dinner exento/taxable
+            const perthAllowancePerTrip = 239.12;
             const holidayRatePerDay = 17.39; 
 
             const getTripDuration = (trip) => {
@@ -261,7 +262,6 @@ HHHHHHHHHHH---------
                         const isPerth = item.duty.startsWith('PRL') || item.duty === 'QF10' || item.duty === 'QF209';
                         const duration = isPerth ? 6 : 4;
 
-                        // Comprobar si la fecha cae dentro del rango de algún trip ya registrado
                         const isOverlapping = (tripList) => tripList.some(t => {
                             if (t.holiday) return false;
                             const tStart = new Date(t.year, t.month - 1, t.day).getTime();
@@ -304,7 +304,7 @@ HHHHHHHHHHH---------
 
                 setAllTrips(updatedHistory);
                 setUploadedFiles([...uploadedFiles, newFileEntry]);
-                setSelectedPeriod(`02-${targetYear}`);
+                setSelectedPeriod(`08-${targetYear}`);
                 alert(`¡Roster "${fileName}" procesado correctamente!`);
             };
 
@@ -434,7 +434,7 @@ HHHHHHHHHHH---------
                 if (f.type === 'perth' || (f.type === 'sby' && f.calledOut && f.callType === 'perth')) {
                     total = 152.02 + 37.42 + 74.85; 
                 } else if (f.type === 'singapore' || (f.type === 'sby' && f.calledOut && f.callType === 'singapore')) {
-                    total = 74.85 * 2;
+                    total = 74.85 * 2; // Sector Pay 2 (2 sectores)
                 }
                 if (f.delay16h || (f.calledOut && f.delay16h)) total += 119.75;
                 return acc + total;
@@ -442,7 +442,7 @@ HHHHHHHHHHH---------
 
             const calculatedAllowances = filteredTrips.reduce((acc, f) => {
                 if (f.type === 'singapore' || (f.type === 'sby' && f.calledOut && f.callType === 'singapore')) return acc + singaporeAllowancePerTrip;
-                if (f.type === 'perth' || (f.type === 'sby' && f.calledOut && f.callType === 'perth')) return acc + 480.00;
+                if (f.type === 'perth' || (f.type === 'sby' && f.calledOut && f.callType === 'perth')) return acc + perthAllowancePerTrip;
                 return acc;
             }, 0);
 
@@ -453,7 +453,11 @@ HHHHHHHHHHH---------
 
             const estimatedGross = basePay + fixedAllowance + calculatedSectorPay + calculatedAllowances + calculatedHolidayPay;
 
-            const estimatedTax = 367.40;
+            // DEDUCCIONES EXACTAS FIDELIZADAS CON TUS PAYSLIPS REALES
+            const taxFreeAllowanceMonthly = 1107.50; // Tax Code 1329L
+            const taxableAmount = Math.max(0, estimatedGross - taxFreeAllowanceMonthly);
+            const estimatedTax = taxableAmount * 0.20;
+
             const niThresholdMonthly = 1048.00;
             let estimatedNI = 0;
             if (estimatedGross > niThresholdMonthly) {
@@ -461,7 +465,7 @@ HHHHHHHHHHH---------
                 estimatedNI = niSubjectAmount * 0.08;
             }
 
-            const estimatedPension = estimatedGross * 0.05;
+            const estimatedPension = (basePay + fixedAllowance) * 0.05; // 5% Salary Sacrifice sobre fijo
             const totalDeductions = estimatedTax + estimatedNI + estimatedPension;
             const estimatedNet = estimatedGross - totalDeductions;
 
