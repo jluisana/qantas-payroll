@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control Automático de Roster y Nómina - Qantas Tripulante</title>
+    <title>Qantas Cabin Crew - Roster & Payroll Control</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <!-- React y Babel -->
@@ -15,7 +15,119 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        const translations = {
+            es: {
+                subtitle: "Control Automático de Roster y Nómina",
+                privateProfile: "Perfil Privado:",
+                newUser: "+ Nuevo",
+                activePeriod: "Período Activo",
+                viewAll: "Ver Todos los Vuelos Acumulados",
+                clearHistory: "Vaciar todo el histórico",
+                baseFixed: "Base + Fijo",
+                sectorsAllowances: "Sectors, Dietas & AL",
+                estGross: "Estimado Bruto",
+                estNet: "Estimado Neto",
+                incomplete: "Incompleto 🟠",
+                rolling28: "Horas de Vuelo (Rolling 28 Días)",
+                rolling365: "Horas de Vuelo (Rolling 365 Días)",
+                maxHours: "máx",
+                addRosterTitle: "Añadir Roster al Histórico",
+                dragDropText: "Arrastra y suelta tu archivo de Roster aquí",
+                orChoose: "o bien",
+                selectFile: "📂 Seleccionar Archivo",
+                uploadedHistory: "Historial de Rosters Subidos",
+                hide: "▲ Ocultar",
+                viewFiles: "▼ Ver archivos",
+                deleteRoster: "🗑️ Borrar roster",
+                tripsInPeriod: "Trips de este Periodo",
+                noRoster: "No hay roster cargado para este periodo. Sube tu archivo .txt arriba.",
+                holidayBlock: "Bloque Vacaciones:",
+                days: "días",
+                standby: "Standby",
+                activated: "Activado: Vuelo",
+                callOutCheck: "Call-out (¿Llamaron?)",
+                apply16h: "Aplicar +16h",
+                delete: "Eliminar",
+                deductionsBreakdown: "Desglose de Deducciones",
+                tax: "Impuestos (Tax Code 1329L)",
+                ni: "Seguridad Social (NI Cat A)",
+                niSub: "8% sobre lo que supere £1,048/mes",
+                pension: "Pensión (People's Pension)",
+                pensionSub: "5% Salary Sacrifice (variable)",
+                totalDeductions: "Total Deducciones:",
+                modalYearTitle: "Selecciona el Año del Roster",
+                modalYearSub: "Elige a qué año corresponde el archivo:",
+                cancel: "Cancelar",
+                confirm: "Confirmar",
+                createProfileTitle: "Añadir Nuevo Tripulante",
+                createProfileSub: "Crea tu perfil con una clave personal:",
+                nameLabel: "Nombre:",
+                pinLabel: "PIN Secreto:",
+                createBtn: "Crear Perfil",
+                accessPromptTitle: "Acceso de",
+                accessPromptSub: "Introduce tu PIN privado para ver tus datos:",
+                enterBtn: "Entrar",
+                months: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+            },
+            en: {
+                subtitle: "Automatic Roster & Payroll Control",
+                privateProfile: "Private Profile:",
+                newUser: "+ New",
+                activePeriod: "Active Period",
+                viewAll: "View All Accumulated Flights",
+                clearHistory: "Clear all history",
+                baseFixed: "Base + Fixed",
+                sectorsAllowances: "Sectors, Allowances & AL",
+                estGross: "Estimated Gross",
+                estNet: "Estimated Net",
+                incomplete: "Incomplete 🟠",
+                rolling28: "Flight Hours (Rolling 28 Days)",
+                rolling365: "Flight Hours (Rolling 365 Days)",
+                maxHours: "max",
+                addRosterTitle: "Add Roster to History",
+                dragDropText: "Drag & drop your Roster file here",
+                orChoose: "or",
+                selectFile: "📂 Select File",
+                uploadedHistory: "Uploaded Rosters History",
+                hide: "▲ Hide",
+                viewFiles: "▼ View files",
+                deleteRoster: "🗑️ Delete roster",
+                tripsInPeriod: "Trips in this Period",
+                noRoster: "No roster uploaded for this period. Upload your .txt file above.",
+                holidayBlock: "Holiday Block:",
+                days: "days",
+                standby: "Standby",
+                activated: "Activated: Flight",
+                callOutCheck: "Call-out (Called?)",
+                apply16h: "Apply +16h",
+                delete: "Delete",
+                deductionsBreakdown: "Deductions Breakdown",
+                tax: "Tax (Tax Code 1329L)",
+                ni: "National Insurance (NI Cat A)",
+                niSub: "8% over £1,048/month",
+                pension: "Pension (People's Pension)",
+                pensionSub: "5% Salary Sacrifice (variable)",
+                totalDeductions: "Total Deductions:",
+                modalYearTitle: "Select Roster Year",
+                modalYearSub: "Choose the year for this file:",
+                cancel: "Cancel",
+                confirm: "Confirm",
+                createProfileTitle: "Add New Crew Member",
+                createProfileSub: "Create your profile with a personal PIN:",
+                nameLabel: "Name:",
+                pinLabel: "Secret PIN:",
+                createBtn: "Create Profile",
+                accessPromptTitle: "Access for",
+                accessPromptSub: "Enter your private PIN to view your data:",
+                enterBtn: "Enter",
+                months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+            }
+        };
+
         function App() {
+            const [lang, setLang] = React.useState('es');
+            const t = translations[lang];
+
             const [usersData, setUsersData] = React.useState(() => {
                 const saved = localStorage.getItem('qantas_users_credentials_v1');
                 return saved ? JSON.parse(saved) : [
@@ -92,7 +204,7 @@
                     setPinPromptUser(null);
                     setEnteredPin('');
                 } else {
-                    alert('PIN incorrecto. Inténtalo de nuevo.');
+                    alert(lang === 'es' ? 'PIN incorrecto. Inténtalo de nuevo.' : 'Incorrect PIN. Try again.');
                     setEnteredPin('');
                 }
             };
@@ -103,12 +215,12 @@
                 const trimmedPin = newUserPin.trim();
 
                 if (!trimmedName || !trimmedPin) {
-                    alert('Por favor, introduce nombre y PIN.');
+                    alert(lang === 'es' ? 'Por favor, introduce nombre y PIN.' : 'Please enter name and PIN.');
                     return;
                 }
 
                 if (usersData.some(u => u.name.toLowerCase() === trimmedName.toLowerCase())) {
-                    alert('Este nombre de usuario ya existe.');
+                    alert(lang === 'es' ? 'Este nombre de usuario ya existe.' : 'This username already exists.');
                     return;
                 }
 
@@ -121,10 +233,9 @@
                 setIsAddingUser(false);
             };
 
-            // CONCEPTOS CONTRACTUALES Y TARIFAS PAYSYSTEM DEDUCIDAS DE TUS PAYSLIPS REALES
             const basePay = 1916.58;
             const fixedAllowance = 80.27;
-            const singaporeAllowancePerTrip = 421.32; // Promedio exacto del desglose Brkfst + Lunch + Dinner exento/taxable
+            const singaporeAllowancePerTrip = 421.32; 
             const perthAllowancePerTrip = 239.12;
             const holidayRatePerDay = 17.39; 
 
@@ -195,7 +306,7 @@
                 });
 
                 if (rawDutyList.length === 0) {
-                    alert('No se pudieron leer los vuelos o turnos del archivo.');
+                    alert(lang === 'es' ? 'No se pudieron leer los vuelos o turnos del archivo.' : 'Could not read flights or duties from file.');
                     return;
                 }
 
@@ -228,7 +339,7 @@
                                 month: item.month,
                                 year: item.year,
                                 dateStr: item.dateStr,
-                                duty: 'Vacaciones (AL)',
+                                duty: lang === 'es' ? 'Vacaciones (AL)' : 'Holiday (AL)',
                                 type: 'holiday',
                                 count: 1,
                                 delay16h: false,
@@ -305,7 +416,7 @@
                 setAllTrips(updatedHistory);
                 setUploadedFiles([...uploadedFiles, newFileEntry]);
                 setSelectedPeriod(`08-${targetYear}`);
-                alert(`¡Roster "${fileName}" procesado correctamente!`);
+                alert(lang === 'es' ? `¡Roster "${fileName}" procesado correctamente!` : `Roster "${fileName}" successfully processed!`);
             };
 
             const processFileObject = (file) => {
@@ -341,7 +452,7 @@
             };
 
             const handleDeleteFile = (fileId, fileName) => {
-                if (confirm(`¿Deseas eliminar el roster "${fileName}" y todos sus turnos asociados?`)) {
+                if (confirm(lang === 'es' ? `¿Deseas eliminar el roster "${fileName}" y todos sus turnos asociados?` : `Do you want to delete roster "${fileName}" and all associated duties?`)) {
                     const remainingTrips = allTrips.filter(t => t.fileToken !== fileId);
                     const remainingFiles = uploadedFiles.filter(f => f.id !== fileId);
                     setAllTrips(remainingTrips);
@@ -350,7 +461,7 @@
             };
 
             const handleClearHistory = () => {
-                if (confirm(`¿Deseas vaciar TODO el histórico de rosters para ${currentUser}?`)) {
+                if (confirm(lang === 'es' ? `¿Deseas vaciar TODO el histórico de rosters para ${currentUser}?` : `Do you want to clear ALL roster history for ${currentUser}?`)) {
                     setAllTrips([]);
                     setUploadedFiles([]);
                     localStorage.removeItem(`trip_history_${currentUser}`);
@@ -434,7 +545,7 @@
                 if (f.type === 'perth' || (f.type === 'sby' && f.calledOut && f.callType === 'perth')) {
                     total = 152.02 + 37.42 + 74.85; 
                 } else if (f.type === 'singapore' || (f.type === 'sby' && f.calledOut && f.callType === 'singapore')) {
-                    total = 74.85 * 2; // Sector Pay 2 (2 sectores)
+                    total = 74.85 * 2; 
                 }
                 if (f.delay16h || (f.calledOut && f.delay16h)) total += 119.75;
                 return acc + total;
@@ -453,8 +564,7 @@
 
             const estimatedGross = basePay + fixedAllowance + calculatedSectorPay + calculatedAllowances + calculatedHolidayPay;
 
-            // DEDUCCIONES EXACTAS FIDELIZADAS CON TUS PAYSLIPS REALES
-            const taxFreeAllowanceMonthly = 1107.50; // Tax Code 1329L
+            const taxFreeAllowanceMonthly = 1107.50; 
             const taxableAmount = Math.max(0, estimatedGross - taxFreeAllowanceMonthly);
             const estimatedTax = taxableAmount * 0.20;
 
@@ -465,7 +575,7 @@
                 estimatedNI = niSubjectAmount * 0.08;
             }
 
-            const estimatedPension = (basePay + fixedAllowance) * 0.05; // 5% Salary Sacrifice sobre fijo
+            const estimatedPension = (basePay + fixedAllowance) * 0.05; 
             const totalDeductions = estimatedTax + estimatedNI + estimatedPension;
             const estimatedNet = estimatedGross - totalDeductions;
 
@@ -501,16 +611,9 @@
                 availableYears.push(y);
             }
 
-            const monthsList = [
-                { m: '01', name: 'Enero' }, { m: '02', name: 'Febrero' }, { m: '03', name: 'Marzo' },
-                { m: '04', name: 'Abril' }, { m: '05', name: 'Mayo' }, { m: '06', name: 'Junio' },
-                { m: '07', name: 'Julio' }, { m: '08', name: 'Agosto' }, { m: '09', name: 'Septiembre' },
-                { m: '10', name: 'Octubre' }, { m: '11', name: 'Noviembre' }, { m: '12', name: 'Diciembre' }
-            ];
-
             const [targetMShow, targetYShow] = selectedPeriod !== 'all' ? selectedPeriod.split('-') : [null, null];
-            const currentMonthName = targetMShow ? monthsList.find(item => item.m === targetMShow)?.name : '';
-            const currentLabel = selectedPeriod === 'all' ? 'Ver Todos' : `${currentMonthName} ${targetYShow}`;
+            const currentMonthName = targetMShow ? t.months[parseInt(targetMShow, 10) - 1] : '';
+            const currentLabel = selectedPeriod === 'all' ? t.viewAll : `${currentMonthName} ${targetYShow}`;
             
             const currentPeriodStatus = selectedPeriod !== 'all' ? getPeriodStatus(targetMShow, parseInt(targetYShow, 10)) : 'all';
 
@@ -521,8 +624,8 @@
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
                             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 text-center">
                                 <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-3 font-bold text-xl">🔒</div>
-                                <h3 className="text-lg font-bold text-slate-900 mb-1">Acceso de {pinPromptUser}</h3>
-                                <p className="text-xs text-slate-500 mb-4">Introduce tu PIN privado para ver tus datos:</p>
+                                <h3 className="text-lg font-bold text-slate-900 mb-1">{t.accessPromptTitle} {pinPromptUser}</h3>
+                                <p className="text-xs text-slate-500 mb-4">{t.accessPromptSub}</p>
                                 <form onSubmit={handleVerifyPin}>
                                     <input 
                                         type="password"
@@ -534,8 +637,8 @@
                                         autoFocus
                                     />
                                     <div className="flex gap-3">
-                                        <button type="button" onClick={() => setPinPromptUser(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-xl text-sm transition-colors">Cancelar</button>
-                                        <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm">Entrar</button>
+                                        <button type="button" onClick={() => setPinPromptUser(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-xl text-sm transition-colors">{t.cancel}</button>
+                                        <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm">{t.enterBtn}</button>
                                     </div>
                                 </form>
                             </div>
@@ -545,8 +648,8 @@
                     {pendingFileContent && (
                         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
                             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
-                                <h3 className="text-lg font-bold text-slate-900 mb-2">Selecciona el Año del Roster</h3>
-                                <p className="text-xs text-slate-500 mb-4">Elige a qué año corresponde el archivo de <b>{currentUser}</b>:</p>
+                                <h3 className="text-lg font-bold text-slate-900 mb-2">{t.modalYearTitle}</h3>
+                                <p className="text-xs text-slate-500 mb-4">{t.modalYearSub} <b>{currentUser}</b>:</p>
                                 <select 
                                     value={selectedModalYear}
                                     onChange={(e) => setSelectedModalYear(e.target.value)}
@@ -557,8 +660,8 @@
                                     ))}
                                 </select>
                                 <div className="flex gap-3">
-                                    <button onClick={() => setPendingFileContent(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-xl text-sm transition-colors">Cancelar</button>
-                                    <button onClick={() => confirmAndProcessRoster(parseInt(selectedModalYear, 10))} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm">Confirmar</button>
+                                    <button onClick={() => setPendingFileContent(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-xl text-sm transition-colors">{t.cancel}</button>
+                                    <button onClick={() => confirmAndProcessRoster(parseInt(selectedModalYear, 10))} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm">{t.confirm}</button>
                                 </div>
                             </div>
                         </div>
@@ -567,26 +670,27 @@
                     {isAddingUser && (
                         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
                             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
-                                <h3 className="text-lg font-bold text-slate-900 mb-2">Añadir Nuevo Tripulante</h3>
-                                <p className="text-xs text-slate-500 mb-4">Crea tu perfil con una clave personal:</p>
+                                <h3 className="text-lg font-bold text-slate-900 mb-2">{t.createProfileTitle}</h3>
+                                <p className="text-xs text-slate-500 mb-4">{t.createProfileSub}</p>
                                 <form onSubmit={handleCreateUser} className="space-y-4">
                                     <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1">Nombre:</label>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.nameLabel}</label>
                                         <input type="text" placeholder="Ej: Carlos" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" autoFocus />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1">PIN Secreto:</label>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.pinLabel}</label>
                                         <input type="password" maxLength="6" placeholder="Ej: 5678" value={newUserPin} onChange={(e) => setNewUserPin(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" />
                                     </div>
                                     <div className="flex gap-3 pt-2">
-                                        <button type="button" onClick={() => setIsAddingUser(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-xl text-sm transition-colors">Cancelar</button>
-                                        <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm">Crear Perfil</button>
+                                        <button type="button" onClick={() => setIsAddingUser(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-xl text-sm transition-colors">{t.cancel}</button>
+                                        <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm">{t.createBtn}</button>
                                     </div>
                                 </form>
                             </div>
                         </div>
                     )}
 
+                    {/* CABECERA CON SELECTOR DE IDIOMA */}
                     <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4 border-b border-slate-200 pb-6">
                         <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-center sm:justify-start">
                             <div className="h-10 sm:h-12 w-auto flex-shrink-0">
@@ -602,22 +706,29 @@
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2 bg-white p-2 rounded-2xl shadow-xs border border-slate-200 w-full sm:w-auto justify-between sm:justify-start">
-                            <span className="text-xs font-medium text-slate-400 pl-2">Perfil Privado:</span>
-                            <select value={currentUser} onChange={(e) => handleSelectUser(e.target.value)} className="bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs py-2 px-3 rounded-xl outline-none cursor-pointer">
-                                {usersData.map(u => (<option key={u.name} value={u.name}>👤 {u.name}</option>))}
-                            </select>
-                            <button onClick={() => setIsAddingUser(true)} className="bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs px-3 py-2 rounded-xl transition-colors">+ Nuevo</button>
+                        <div className="flex items-center gap-3 w-full sm:w-auto justify-center">
+                            <div className="flex bg-slate-200/70 p-1 rounded-xl text-xs font-bold">
+                                <button onClick={() => setLang('es')} className={`px-3 py-1.5 rounded-lg transition-colors ${lang === 'es' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600'}`}>🇪🇸 ESP</button>
+                                <button onClick={() => setLang('en')} className={`px-3 py-1.5 rounded-lg transition-colors ${lang === 'en' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600'}`}>🇬🇧 ENG</button>
+                            </div>
+
+                            <div className="flex items-center gap-2 bg-white p-2 rounded-2xl shadow-xs border border-slate-200">
+                                <span className="text-xs font-medium text-slate-400 pl-2">{t.privateProfile}</span>
+                                <select value={currentUser} onChange={(e) => handleSelectUser(e.target.value)} className="bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs py-2 px-3 rounded-xl outline-none cursor-pointer">
+                                    {usersData.map(u => (<option key={u.name} value={u.name}>👤 {u.name}</option>))}
+                                </select>
+                                <button onClick={() => setIsAddingUser(true)} className="bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs px-3 py-2 rounded-xl transition-colors">{t.newUser}</button>
+                            </div>
                         </div>
                     </div>
 
                     <div className="text-center mb-8">
-                        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Control Automático de Roster y Nómina</h2>
+                        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">{t.subtitle}</h2>
                     </div>
 
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4 relative">
                         <div className="w-full sm:w-auto relative">
-                            <span className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Período Activo ({currentUser}):</span>
+                            <span className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">{t.activePeriod} ({currentUser}):</span>
                             <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="w-full sm:w-80 bg-slate-50 hover:bg-slate-100 border border-slate-300 font-semibold py-3 px-4 rounded-xl text-sm flex items-center justify-between transition-colors shadow-2xs">
                                 <div className="flex items-center gap-2.5">
                                     {selectedPeriod !== 'all' ? (
@@ -625,7 +736,7 @@
                                             currentPeriodStatus === 'complete' ? 'bg-emerald-500 ring-2 ring-emerald-100' : 'bg-slate-300'
                                         }`}></span>
                                     ) : (<span className="text-red-600 font-bold">🔍</span>)}
-                                    <span className="text-slate-800">Nómina de {currentLabel}</span>
+                                    <span className="text-slate-800">{currentLabel}</span>
                                 </div>
                                 <span className={`text-slate-400 transform transition-transform duration-200 ${isMenuOpen ? 'rotate-180' : ''}`}>▼</span>
                             </button>
@@ -640,13 +751,14 @@
                                             </button>
                                             {expandedYear === String(year) && (
                                                 <div className="mt-1.5 pl-2 space-y-1">
-                                                    {monthsList.map(monthObj => {
-                                                        const status = getPeriodStatus(monthObj.m, year);
-                                                        const periodKey = `${monthObj.m}-${year}`;
+                                                    {t.months.map((monthName, idx) => {
+                                                        const mNum = String(idx + 1).padStart(2, '0');
+                                                        const status = getPeriodStatus(mNum, year);
+                                                        const periodKey = `${mNum}-${year}`;
                                                         const isSelected = selectedPeriod === periodKey;
                                                         return (
                                                             <button key={periodKey} onClick={() => { setSelectedPeriod(periodKey); setIsMenuOpen(false); }} className={`w-full flex items-center justify-between p-2 rounded-xl text-xs font-medium transition-colors text-left ${isSelected ? 'bg-red-50 text-red-700 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}>
-                                                                <span>Nómina de {monthObj.name}</span>
+                                                                <span>{monthName} {year}</span>
                                                                 <span className={`w-3 h-3 rounded-full flex-shrink-0 ${
                                                                     status === 'complete' ? 'bg-emerald-500 ring-2 ring-emerald-100' : 'bg-slate-300'
                                                                 }`}></span>
@@ -659,7 +771,7 @@
                                     ))}
                                     <div className="pt-2 border-t border-slate-100">
                                         <button onClick={() => { setSelectedPeriod('all'); setIsMenuOpen(false); }} className="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-medium hover:bg-slate-50 text-red-600 font-semibold">
-                                            <span>🔍 Ver Todos los Vuelos Acumulados</span>
+                                            <span>🔍 {t.viewAll}</span>
                                         </button>
                                     </div>
                                 </div>
@@ -668,26 +780,26 @@
 
                         {allTrips.length > 0 && (
                             <button onClick={handleClearHistory} className="text-red-500 hover:text-red-700 text-xs font-medium underline">
-                                Vaciar todo el histórico ({allTrips.length})
+                                {t.clearHistory} ({allTrips.length})
                             </button>
                         )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Base + Fijo</span>
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.baseFixed}</span>
                             <h2 className="text-2xl font-bold text-slate-900 mt-1">£{(basePay + fixedAllowance).toFixed(2)}</h2>
                         </div>
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Sectores, Dietas & AL</span>
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.sectorsAllowances}</span>
                             <h2 className="text-2xl font-bold text-red-600 mt-1">£{(calculatedSectorPay + calculatedAllowances + calculatedHolidayPay).toFixed(2)}</h2>
                         </div>
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Estimado Bruto</span>
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.estGross}</span>
                             <h2 className="text-2xl font-bold text-slate-800 mt-1">£{estimatedGross.toFixed(2)}</h2>
                         </div>
                         <div className="bg-red-600 text-white p-5 rounded-2xl shadow-md transition-all">
-                            <span className="text-xs font-bold uppercase tracking-wider text-red-100">Estimado Neto</span>
+                            <span className="text-xs font-bold uppercase tracking-wider text-red-100">{t.estNet}</span>
                             <h2 className="text-2xl font-black text-white mt-1">£{estimatedNet.toFixed(2)}</h2>
                         </div>
                     </div>
@@ -695,9 +807,9 @@
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                             <div className="flex justify-between items-center mb-2">
-                                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Horas de Vuelo (Rolling 28 Días)</span>
+                                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t.rolling28}</span>
                                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${rollingMonthHours > 90 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}>
-                                    {rollingMonthHours.toFixed(1)}h / 100h máx
+                                    {rollingMonthHours.toFixed(1)}h / 100h {t.maxHours}
                                 </span>
                             </div>
                             <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
@@ -707,9 +819,9 @@
 
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                             <div className="flex justify-between items-center mb-2">
-                                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Horas de Vuelo (Rolling 365 Días)</span>
+                                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t.rolling365}</span>
                                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${rollingYearHours > 800 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}>
-                                    {rollingYearHours.toFixed(1)}h / 900h máx
+                                    {rollingYearHours.toFixed(1)}h / 900h {t.maxHours}
                                 </span>
                             </div>
                             <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
@@ -720,8 +832,8 @@
 
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8 space-y-4">
                         <div>
-                            <h3 className="text-lg font-semibold text-slate-800 mb-1">Añadir Roster al Histórico de {currentUser} (.txt)</h3>
-                            <p className="text-xs text-slate-500 mb-3">Arrastra tu archivo .txt aquí abajo o usa el botón para elegirlo.</p>
+                            <h3 className="text-lg font-semibold text-slate-800 mb-1">{t.addRosterTitle} {currentUser} (.txt)</h3>
+                            <p className="text-xs text-slate-500 mb-3">{t.dragDropText}</p>
                             
                             <div 
                                 onDragOver={handleDragOver}
@@ -730,10 +842,10 @@
                                 className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${isDragging ? 'border-red-600 bg-red-50/50' : 'border-slate-300 bg-slate-50/30 hover:bg-slate-50'}`}
                             >
                                 <div className="text-3xl mb-2">📄</div>
-                                <p className="text-xs font-semibold text-slate-700 mb-2">Arrastra y suelta tu archivo de Roster aquí</p>
-                                <span className="text-[10px] text-slate-400 block mb-4">o bien</span>
+                                <p className="text-xs font-semibold text-slate-700 mb-2">{t.dragDropText}</p>
+                                <span className="text-[10px] text-slate-400 block mb-4">{t.orChoose}</span>
                                 <label className="inline-block bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-5 rounded-xl text-sm cursor-pointer transition-colors shadow-sm">
-                                    📂 Seleccionar Archivo
+                                    {t.selectFile}
                                     <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
                                 </label>
                             </div>
@@ -745,8 +857,8 @@
                                     onClick={() => setIsFilesOpen(!isFilesOpen)}
                                     className="w-full p-3.5 flex justify-between items-center text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
                                 >
-                                    <span>📁 Historial de Rosters Subidos ({uploadedFiles.length})</span>
-                                    <span>{isFilesOpen ? '▲ Ocultar' : '▼ Ver archivos'}</span>
+                                    <span>📁 {t.uploadedHistory} ({uploadedFiles.length})</span>
+                                    <span>{isFilesOpen ? t.hide : t.viewFiles}</span>
                                 </button>
                                 {isFilesOpen && (
                                     <div className="p-3 space-y-2">
@@ -754,13 +866,13 @@
                                             <div key={file.id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
                                                 <div>
                                                     <span className="text-xs font-bold text-slate-800 block">📄 {file.name}</span>
-                                                    <span className="text-[10px] text-slate-400">Subido el {file.dateUploaded}</span>
+                                                    <span className="text-[10px] text-slate-400">{file.dateUploaded}</span>
                                                 </div>
                                                 <button 
                                                     onClick={() => handleDeleteFile(file.id, file.name)}
                                                     className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
                                                 >
-                                                    🗑️ Borrar roster
+                                                    {t.deleteRoster}
                                                 </button>
                                             </div>
                                         ))}
@@ -773,15 +885,15 @@
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                             <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                                <h3 className="text-lg font-semibold text-slate-800">Trips de {currentUser} en este Periodo ({filteredTrips.length})</h3>
+                                <h3 className="text-lg font-semibold text-slate-800">{t.tripsInPeriod} ({filteredTrips.length})</h3>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse text-sm">
                                     <thead>
                                         <tr className="bg-slate-50 text-slate-400 font-medium border-b border-slate-100">
-                                            <th className="p-4">Fecha Inicio</th>
-                                            <th className="p-4">Patrón</th>
-                                            <th className="p-4">Tipo / Detalle</th>
+                                            <th className="p-4">Fecha / Date</th>
+                                            <th className="p-4">Patrón / Duty</th>
+                                            <th className="p-4">Tipo / Detail</th>
                                             <th className="p-4">Opciones</th>
                                             <th className="p-4 text-right">Acción</th>
                                         </tr>
@@ -790,7 +902,7 @@
                                         {filteredTrips.length === 0 ? (
                                             <tr>
                                                 <td colSpan="5" className="p-6 text-center text-slate-400">
-                                                    No hay roster cargado para {currentUser} en este periodo. Sube tu archivo .txt arriba.
+                                                    {t.noRoster}
                                                 </td>
                                             </tr>
                                         ) : (
@@ -798,15 +910,15 @@
                                                 <tr key={f.id} className="hover:bg-slate-50/50">
                                                     <td className="p-4 text-slate-600 font-medium">{f.dateStr}</td>
                                                     <td className="p-4 font-semibold text-slate-800">
-                                                        {f.type === 'sby' && f.calledOut ? `Vuelo ${f.callType.toUpperCase()} (Call-out)` : f.duty}
+                                                        {f.type === 'sby' && f.calledOut ? `Flight ${f.callType.toUpperCase()} (Call-out)` : f.duty}
                                                     </td>
                                                     <td className="p-4 text-slate-600 text-xs">
                                                         {f.holiday ? (
-                                                            <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-medium">Bloque Vacaciones: {f.count} días (£{(f.count * holidayRatePerDay).toFixed(2)})</span>
+                                                            <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-medium">{t.holidayBlock} {f.count} {t.days} (£{(f.count * holidayRatePerDay).toFixed(2)})</span>
                                                         ) : f.type === 'sby' ? (
                                                             <div className="space-y-1">
                                                                 <span className={`px-2 py-0.5 rounded font-semibold inline-block ${f.calledOut ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                                                                    {f.calledOut ? `Activado: Vuelo ${f.callType.toUpperCase()}` : `Standby (${f.count || 1} día/s)`}
+                                                                    {f.calledOut ? `${t.activated} ${f.callType.toUpperCase()}` : `${t.standby} (${f.count || 1})`}
                                                                 </span>
                                                                 {f.calledOut && (
                                                                     <div className="flex gap-1 pt-1">
@@ -823,17 +935,17 @@
                                                         {f.type === 'sby' ? (
                                                             <label className="flex items-center space-x-2 cursor-pointer text-emerald-600 font-bold">
                                                                 <input type="checkbox" checked={f.calledOut} onChange={() => toggleCallOut(f.id)} className="rounded text-emerald-600" />
-                                                                <span>Call-out (¿Llamaron?)</span>
+                                                                <span>{t.callOutCheck}</span>
                                                             </label>
                                                         ) : !f.holiday ? (
                                                             <label className="flex items-center space-x-2 cursor-pointer text-red-600 font-medium">
                                                                 <input type="checkbox" checked={f.delay16h} onChange={() => toggleDelay(f.id)} className="rounded text-red-600" />
-                                                                <span>Aplicar +16h</span>
+                                                                <span>{t.apply16h}</span>
                                                             </label>
                                                         ) : null}
                                                     </td>
                                                     <td className="p-4 text-right">
-                                                        <button onClick={() => handleDeleteTrip(f.id)} className="text-red-500 hover:text-red-700 font-medium text-xs">Eliminar</button>
+                                                        <button onClick={() => handleDeleteTrip(f.id)} className="text-red-500 hover:text-red-700 font-medium text-xs">{t.delete}</button>
                                                     </td>
                                                 </tr>
                                             ))
@@ -845,23 +957,23 @@
 
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
                             <div>
-                                <h3 className="text-lg font-semibold text-slate-800 mb-4">Desglose de Deducciones</h3>
+                                <h3 className="text-lg font-semibold text-slate-800 mb-4">{t.deductionsBreakdown}</h3>
                                 <ul className="space-y-3 text-sm text-slate-600">
                                     <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <span>Impuestos (Tax Code 1329L)</span>
+                                        <span>{t.tax}</span>
                                         <span className="font-semibold text-slate-800">£{estimatedTax.toFixed(2)}</span>
                                     </li>
                                     <li className="flex justify-between pb-2 border-b border-slate-100">
                                         <div>
-                                            <span className="block font-medium">Seguridad Social (NI Cat A)</span>
-                                            <span className="text-[10px] text-slate-400">8% sobre lo que supere £1,048/mes</span>
+                                            <span className="block font-medium">{t.ni}</span>
+                                            <span className="text-[10px] text-slate-400">{t.niSub}</span>
                                         </div>
                                         <span className="font-semibold text-slate-800">£{estimatedNI.toFixed(2)}</span>
                                     </li>
                                     <li className="flex justify-between pb-2 border-b border-slate-100">
                                         <div>
-                                            <span className="block font-medium">Pensión (People's Pension)</span>
-                                            <span className="text-[10px] text-slate-400">5% Salary Sacrifice (variable)</span>
+                                            <span className="block font-medium">{t.pension}</span>
+                                            <span className="text-[10px] text-slate-400">{t.pensionSub}</span>
                                         </div>
                                         <span className="font-semibold text-slate-800">£{estimatedPension.toFixed(2)}</span>
                                     </li>
@@ -869,7 +981,7 @@
                             </div>
                             <div className="mt-6 pt-4 border-t border-slate-200 bg-slate-50 p-4 rounded-xl">
                                 <div className="flex justify-between items-center text-sm font-bold text-slate-900">
-                                    <span>Total Deducciones:</span>
+                                    <span>{t.totalDeductions}</span>
                                     <span className="text-red-600">-£{totalDeductions.toFixed(2)}</span>
                                 </div>
                             </div>
