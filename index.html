@@ -46,7 +46,10 @@
                 standby: "Standby",
                 activated: "Activado: Vuelo",
                 callOutCheck: "Call-out (¿Llamaron?)",
-                apply16h: "Aplicar +16h",
+                apply16hLabel: "Aplica +16h:",
+                noDelay: "Sin +16h",
+                oneSector: "+16h (1 sector)",
+                twoSectors: "+16h (2 sectores)",
                 delete: "Eliminar",
                 deductionsBreakdown: "Desglose de Deducciones",
                 tax: "Impuestos (Tax Code 1329L)",
@@ -99,7 +102,10 @@
                 standby: "Standby",
                 activated: "Activated: Flight",
                 callOutCheck: "Call-out (Called?)",
-                apply16h: "Apply +16h",
+                apply16hLabel: "Apply +16h:",
+                noDelay: "No +16h",
+                oneSector: "+16h (1 sector)",
+                twoSectors: "+16h (2 sectors)",
                 delete: "Delete",
                 deductionsBreakdown: "Deductions Breakdown",
                 tax: "Tax (Tax Code 1329L)",
@@ -167,7 +173,7 @@
                 return [];
             });
 
-            const [selectedPeriod, setSelectedPeriod] = React.useState('08-2026');
+            const [selectedPeriod, setSelectedPeriod] = React.useState('09-2026');
 
             React.useEffect(() => {
                 if (isAuthenticated) {
@@ -342,7 +348,7 @@
                                 duty: lang === 'es' ? 'Vacaciones (AL)' : 'Holiday (AL)',
                                 type: 'holiday',
                                 count: 1,
-                                delay16h: false,
+                                delaySectorsCount: 0,
                                 holiday: true,
                                 calledOut: false
                             };
@@ -361,7 +367,7 @@
                                 dutyBase: 'SBY',
                                 type: 'sby',
                                 count: 1,
-                                delay16h: false,
+                                delaySectorsCount: 0,
                                 holiday: false,
                                 calledOut: false,
                                 callType: 'singapore'
@@ -392,7 +398,7 @@
                                 dutyBase: item.duty,
                                 type: isPerth ? 'perth' : 'singapore',
                                 count: duration,
-                                delay16h: false,
+                                delaySectorsCount: 0,
                                 holiday: false,
                                 calledOut: false,
                                 fileToken
@@ -415,7 +421,7 @@
 
                 setAllTrips(updatedHistory);
                 setUploadedFiles([...uploadedFiles, newFileEntry]);
-                setSelectedPeriod(`08-${targetYear}`);
+                setSelectedPeriod(`09-${targetYear}`);
                 alert(lang === 'es' ? `¡Roster "${fileName}" procesado correctamente!` : `Roster "${fileName}" successfully processed!`);
             };
 
@@ -547,7 +553,8 @@
                 } else if (f.type === 'singapore' || (f.type === 'sby' && f.calledOut && f.callType === 'singapore')) {
                     total = 74.85 * 2; 
                 }
-                if (f.delay16h || (f.calledOut && f.delay16h)) total += 119.75;
+                const delayCount = f.delaySectorsCount || 0;
+                total += (delayCount * 119.75);
                 return acc + total;
             }, 0);
 
@@ -583,8 +590,8 @@
                 setAllTrips(allTrips.filter(t => t.id !== id));
             };
 
-            const toggleDelay = (id) => {
-                setAllTrips(allTrips.map(t => t.id === id ? {...t, delay16h: !t.delay16h} : t));
+            const setDelaySectors = (id, count) => {
+                setAllTrips(allTrips.map(t => t.id === id ? {...t, delaySectorsCount: parseInt(count, 10)} : t));
             };
 
             const toggleCallOut = (id) => {
@@ -690,14 +697,16 @@
                         </div>
                     )}
 
-                    {/* CABECERA CON LOGO COMPLETO AJUSTADO Y SELECTOR DE IDIOMA */}
+                    {/* CABECERA CON SVG INLINE ROBUSTO QUE NUNCA FALLA */}
                     <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4 border-b border-slate-200 pb-6">
                         <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-center sm:justify-start">
-                            <img 
-                                src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Qantas_Logo.svg/1200px-Qantas_Logo.svg.png" 
-                                alt="Qantas Logo" 
-                                className="h-9 sm:h-11 w-auto object-contain flex-shrink-0"
-                            />
+                            <div className="h-9 sm:h-11 w-auto flex items-center">
+                                <svg className="h-full w-auto" viewBox="0 0 260 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M5 5 C25 5 60 5 65 5 C65 18 50 42 42 45 C18 45 12 45 12 45 Z" fill="#E40000" />
+                                    <path d="M18 16 C24 18 32 26 34 30 C35 33 33 34 31 34 C29 34 26 31 24 29 C22 25 17 21 12 19 C10 18 8 17 10 16 C12 15 15 15 18 16 Z" fill="#FFFFFF" />
+                                    <text x="75" y="36" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="32" fontStyle="italic" fill="#0D0D0D" letterSpacing="-1">QANTAS</text>
+                                </svg>
+                            </div>
                             <div className="border-l border-slate-200 pl-3">
                                 <span className="text-[10px] sm:text-[11px] font-black text-red-600 tracking-widest uppercase block leading-tight">CABIN CREW</span>
                                 <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 tracking-wider uppercase block">Roster & Payroll</span>
@@ -892,7 +901,7 @@
                                             <th className="p-4">Fecha / Date</th>
                                             <th className="p-4">Patrón / Duty</th>
                                             <th className="p-4">Tipo / Detail</th>
-                                            <th className="p-4">Opciones</th>
+                                            <th className="p-4">Horas Extra (+16h)</th>
                                             <th className="p-4 text-right">Acción</th>
                                         </tr>
                                     </thead>
@@ -930,16 +939,19 @@
                                                         )}
                                                     </td>
                                                     <td className="p-4 text-xs">
-                                                        {f.type === 'sby' ? (
-                                                            <label className="flex items-center space-x-2 cursor-pointer text-emerald-600 font-bold">
-                                                                <input type="checkbox" checked={f.calledOut} onChange={() => toggleCallOut(f.id)} className="rounded text-emerald-600" />
-                                                                <span>{t.callOutCheck}</span>
-                                                            </label>
-                                                        ) : !f.holiday ? (
-                                                            <label className="flex items-center space-x-2 cursor-pointer text-red-600 font-medium">
-                                                                <input type="checkbox" checked={f.delay16h} onChange={() => toggleDelay(f.id)} className="rounded text-red-600" />
-                                                                <span>{t.apply16h}</span>
-                                                            </label>
+                                                        {!f.holiday ? (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-[11px] font-semibold text-slate-500">{t.apply16hLabel}</span>
+                                                                <select 
+                                                                    value={f.delaySectorsCount || 0} 
+                                                                    onChange={(e) => setDelaySectors(f.id, e.target.value)}
+                                                                    className="bg-slate-100 border border-slate-300 text-slate-800 font-bold text-xs py-1 px-2 rounded-lg outline-none"
+                                                                >
+                                                                    <option value="0">{t.noDelay}</option>
+                                                                    <option value="1">{t.oneSector}</option>
+                                                                    {f.type === 'singapore' && <option value="2">{t.twoSectors}</option>}
+                                                                </select>
+                                                            </div>
                                                         ) : null}
                                                     </td>
                                                     <td className="p-4 text-right">
