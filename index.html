@@ -53,4 +53,478 @@
                 ni: "Seguridad Social (NI Cat A)",
                 niSub: "8% sobre lo que supere £1,048/mes",
                 pension: "Pensión (People's Pension)",
-                pensionSub: "5% Salary Sacrifice (
+                pensionSub: "5% Salary Sacrifice (variable)",
+                totalDeductions: "Total Deducciones:",
+                modalYearTitle: "Selecciona el Año del Roster",
+                modalYearSub: "Elige a qué año corresponde el archivo:",
+                cancel: "Cancelar",
+                confirm: "Confirmar",
+                createProfileTitle: "Añadir Nuevo Tripulante",
+                createProfileSub: "Crea tu perfil con una clave personal:",
+                nameLabel: "Nombre:",
+                pinLabel: "PIN Secreto:",
+                createBtn: "Crear Perfil",
+                accessPromptTitle: "Acceso de",
+                accessPromptSub: "Introduce tu PIN privado para ver tus datos:",
+                enterBtn: "Entrar",
+                months: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+            },
+            en: {
+                subtitle: "Automatic Roster & Payroll Control",
+                privateProfile: "Private Profile:",
+                newUser: "+ New",
+                activePeriod: "Active Period",
+                viewAll: "View All Accumulated Flights",
+                clearHistory: "Clear all history",
+                baseFixed: "Base + Fixed",
+                sectorsAllowances: "Sectors, Allowances & AL",
+                estGross: "Estimated Gross",
+                estNet: "Estimated Net",
+                incomplete: "Incomplete 🟠",
+                rolling28: "Flight Hours (Rolling 28 Days)",
+                rolling365: "Flight Hours (Rolling 365 Days)",
+                maxHours: "max",
+                addRosterTitle: "Add Roster to History",
+                dragDropText: "Drag & drop your Roster file here",
+                orChoose: "or",
+                selectFile: "📂 Select File",
+                uploadedHistory: "Uploaded Rosters History",
+                hide: "▲ Hide",
+                viewFiles: "▼ View files",
+                deleteRoster: "🗑️ Delete roster",
+                tripsInPeriod: "Trips in this Period",
+                noRoster: "No roster uploaded for this period. Upload your .txt file above.",
+                holidayBlock: "Holiday Block:",
+                days: "days",
+                standby: "Standby",
+                activated: "Activated: Flight",
+                callOutCheck: "Call-out (Called?)",
+                apply16h: "Apply +16h",
+                delete: "Delete",
+                deductionsBreakdown: "Deductions Breakdown",
+                tax: "Tax (Tax Code 1329L)",
+                ni: "National Insurance (NI Cat A)",
+                niSub: "8% over £1,048/month",
+                pension: "Pension (People's Pension)",
+                pensionSub: "5% Salary Sacrifice (variable)",
+                totalDeductions: "Total Deductions:",
+                modalYearTitle: "Select Roster Year",
+                modalYearSub: "Choose the year for this file:",
+                cancel: "Cancel",
+                confirm: "Confirm",
+                createProfileTitle: "Add New Crew Member",
+                createProfileSub: "Create your profile with a personal PIN:",
+                nameLabel: "Name:",
+                pinLabel: "Secret PIN:",
+                createBtn: "Create Profile",
+                accessPromptTitle: "Access for",
+                accessPromptSub: "Enter your private PIN to view your data:",
+                enterBtn: "Enter",
+                months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+            }
+        };
+
+        function App() {
+            const [lang, setLang] = React.useState('es');
+            const t = translations[lang];
+
+            const [usersData, setUsersData] = React.useState(() => {
+                const saved = localStorage.getItem('qantas_users_credentials_v1');
+                return saved ? JSON.parse(saved) : [
+                    { name: 'Julia', pin: '1234' }
+                ];
+            });
+
+            const [currentUser, setCurrentUser] = React.useState('Julia');
+            const [isAuthenticated, setIsAuthenticated] = React.useState(true);
+            
+            const [isAddingUser, setIsAddingUser] = React.useState(false);
+            const [newUserName, setNewUserName] = React.useState('');
+            const [newUserPin, setNewUserPin] = React.useState('');
+
+            const [pinPromptUser, setPinPromptUser] = React.useState(null);
+            const [enteredPin, setEnteredPin] = React.useState('');
+
+            const [rosterText, setRosterText] = React.useState('');
+            const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+            const [isFilesOpen, setIsFilesOpen] = React.useState(false);
+            const [expandedYear, setExpandedYear] = React.useState('2026');
+            const [isDragging, setIsDragging] = React.useState(false);
+            
+            const [pendingFileContent, setPendingFileContent] = React.useState(null);
+            const [pendingFileName, setPendingFileName] = React.useState('');
+            const [selectedModalYear, setSelectedModalYear] = React.useState('2026');
+            
+            const [allTrips, setAllTrips] = React.useState(() => {
+                const saved = localStorage.getItem(`trip_history_${currentUser}`);
+                if (saved) return JSON.parse(saved);
+                return [];
+            });
+
+            const [uploadedFiles, setUploadedFiles] = React.useState(() => {
+                const saved = localStorage.getItem(`uploaded_files_${currentUser}`);
+                if (saved) return JSON.parse(saved);
+                return [];
+            });
+
+            const [selectedPeriod, setSelectedPeriod] = React.useState('08-2026');
+
+            React.useEffect(() => {
+                if (isAuthenticated) {
+                    const savedTrips = localStorage.getItem(`trip_history_${currentUser}`);
+                    setAllTrips(savedTrips ? JSON.parse(savedTrips) : []);
+                    const savedFiles = localStorage.getItem(`uploaded_files_${currentUser}`);
+                    setUploadedFiles(savedFiles ? JSON.parse(savedFiles) : []);
+                }
+            }, [currentUser, isAuthenticated]);
+
+            React.useEffect(() => {
+                if (isAuthenticated) {
+                    localStorage.setItem(`trip_history_${currentUser}`, JSON.stringify(allTrips));
+                    localStorage.setItem(`uploaded_files_${currentUser}`, JSON.stringify(uploadedFiles));
+                }
+            }, [allTrips, uploadedFiles, currentUser, isAuthenticated]);
+
+            React.useEffect(() => {
+                localStorage.setItem('qantas_users_credentials_v1', JSON.stringify(usersData));
+            }, [usersData]);
+
+            const handleSelectUser = (userName) => {
+                if (userName === currentUser && isAuthenticated) return;
+                setPinPromptUser(userName);
+                setEnteredPin('');
+            };
+
+            const handleVerifyPin = (e) => {
+                e.preventDefault();
+                const userObj = usersData.find(u => u.name === pinPromptUser);
+                if (userObj && userObj.pin === enteredPin) {
+                    setCurrentUser(pinPromptUser);
+                    setIsAuthenticated(true);
+                    setPinPromptUser(null);
+                    setEnteredPin('');
+                } else {
+                    alert(lang === 'es' ? 'PIN incorrecto. Inténtalo de nuevo.' : 'Incorrect PIN. Try again.');
+                    setEnteredPin('');
+                }
+            };
+
+            const handleCreateUser = (e) => {
+                e.preventDefault();
+                const trimmedName = newUserName.trim();
+                const trimmedPin = newUserPin.trim();
+
+                if (!trimmedName || !trimmedPin) {
+                    alert(lang === 'es' ? 'Por favor, introduce nombre y PIN.' : 'Please enter name and PIN.');
+                    return;
+                }
+
+                if (usersData.some(u => u.name.toLowerCase() === trimmedName.toLowerCase())) {
+                    alert(lang === 'es' ? 'Este nombre de usuario ya existe.' : 'This username already exists.');
+                    return;
+                }
+
+                const newUsers = [...usersData, { name: trimmedName, pin: trimmedPin }];
+                setUsersData(newUsers);
+                setCurrentUser(trimmedName);
+                setIsAuthenticated(true);
+                setNewUserName('');
+                setNewUserPin('');
+                setIsAddingUser(false);
+            };
+
+            const basePay = 1916.58;
+            const fixedAllowance = 80.27;
+            const singaporeAllowancePerTrip = 421.32; 
+            const perthAllowancePerTrip = 239.12;
+            const holidayRatePerDay = 17.39; 
+
+            const getTripDuration = (trip) => {
+                if (trip.holiday) return trip.count || 1;
+                if (trip.type === 'perth') return 6;
+                return 4; 
+            };
+
+            const getTripEndDate = (trip) => {
+                const startDate = new Date(trip.year, trip.month - 1, trip.day);
+                const durationDays = getTripDuration(trip);
+                const endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + (durationDays - 1));
+                return endDate;
+            };
+
+            const getPeriodStatus = (monthStr, yearNum) => {
+                const targetM = parseInt(monthStr, 10);
+                const targetY = yearNum;
+                
+                const prevM = targetM === 1 ? 12 : targetM - 1;
+                const prevY = targetM === 1 ? targetY - 1 : targetY;
+
+                const periodTrips = allTrips.filter(f => {
+                    const endDate = getTripEndDate(f);
+                    const endM = endDate.getMonth() + 1;
+                    const endY = endDate.getFullYear();
+                    const endD = endDate.getDate();
+
+                    return (endY === prevY && endM === prevM && endD >= 16) || (endY === targetY && endM === targetM && endD <= 15);
+                });
+
+                if (periodTrips.length === 0) return 'empty';
+                return 'complete';
+            };
+
+            const confirmAndProcessRoster = (targetYear) => {
+                const text = pendingFileContent;
+                const fileName = pendingFileName || 'Roster.txt';
+                setPendingFileContent(null);
+                setPendingFileName('');
+                if (!text || !text.trim()) return;
+
+                const lines = text.split(/\r?\n/);
+                let rawDutyList = [];
+
+                lines.forEach(line => {
+                    if (line.includes('|') && line.match(/\b\d{2}\/\d{2}\b/)) {
+                        const columns = line.split('|');
+                        columns.forEach(col => {
+                            const trimmedCol = col.trim();
+                            const matchPattern = trimmedCol.match(/(\d{2})\/(\d{2})\s+[A-Z]?\s*(SIL\d+|PRL[A-Z0-9]*|QF\d+|SBY|SR|AL)/);
+                            if (matchPattern) {
+                                let day = parseInt(matchPattern[1], 10);
+                                let month = parseInt(matchPattern[2], 10);
+
+                                rawDutyList.push({
+                                    day,
+                                    month,
+                                    year: targetYear,
+                                    dateStr: `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${targetYear}`,
+                                    duty: matchPattern[3]
+                                });
+                            }
+                        });
+                    }
+                });
+
+                if (rawDutyList.length === 0) {
+                    alert(lang === 'es' ? 'No se pudieron leer los vuelos o turnos del archivo.' : 'Could not read flights or duties from file.');
+                    return;
+                }
+
+                rawDutyList.sort((a, b) => (a.month !== b.month ? a.month - b.month : a.day - b.day));
+
+                const newProcessedTrips = [];
+                let currentHolidayBlock = null;
+                let currentSbyBlock = null;
+                const fileToken = `${fileName}_${Date.now()}`;
+
+                rawDutyList.forEach(item => {
+                    const isSby = item.duty === 'SBY' || item.duty === 'SR';
+                    const isAL = item.duty === 'AL';
+
+                    if (currentSbyBlock && !isSby) {
+                        newProcessedTrips.push({ ...currentSbyBlock, fileToken });
+                        currentSbyBlock = null;
+                    }
+
+                    if (currentHolidayBlock && !isAL) {
+                        newProcessedTrips.push({ ...currentHolidayBlock, fileToken });
+                        currentHolidayBlock = null;
+                    }
+
+                    if (isAL) {
+                        if (!currentHolidayBlock) {
+                            currentHolidayBlock = {
+                                id: Date.now() + Math.random(),
+                                day: item.day,
+                                month: item.month,
+                                year: item.year,
+                                dateStr: item.dateStr,
+                                duty: lang === 'es' ? 'Vacaciones (AL)' : 'Holiday (AL)',
+                                type: 'holiday',
+                                count: 1,
+                                delay16h: false,
+                                holiday: true,
+                                calledOut: false
+                            };
+                        } else {
+                            currentHolidayBlock.count += 1;
+                        }
+                    } else if (isSby) {
+                        if (!currentSbyBlock) {
+                            currentSbyBlock = {
+                                id: Date.now() + Math.random(),
+                                day: item.day,
+                                month: item.month,
+                                year: item.year,
+                                dateStr: item.dateStr,
+                                duty: 'Bloque SBY (Standby)',
+                                dutyBase: 'SBY',
+                                type: 'sby',
+                                count: 1,
+                                delay16h: false,
+                                holiday: false,
+                                calledOut: false,
+                                callType: 'singapore'
+                            };
+                        } else {
+                            currentSbyBlock.count += 1;
+                        }
+                    } else {
+                        const isPerth = item.duty.startsWith('PRL') || item.duty === 'QF10' || item.duty === 'QF209';
+                        const duration = isPerth ? 6 : 4;
+
+                        const isOverlapping = (tripList) => tripList.some(t => {
+                            if (t.holiday) return false;
+                            const tStart = new Date(t.year, t.month - 1, t.day).getTime();
+                            const tEnd = getTripEndDate(t).getTime();
+                            const itemTime = new Date(item.year, item.month - 1, item.day).getTime();
+                            return itemTime >= tStart && itemTime <= tEnd;
+                        });
+
+                        if (!isOverlapping(newProcessedTrips) && !isOverlapping(allTrips)) {
+                            newProcessedTrips.push({
+                                id: Date.now() + Math.random(),
+                                day: item.day,
+                                month: item.month,
+                                year: item.year,
+                                dateStr: item.dateStr,
+                                duty: item.duty.substring(0, 5),
+                                dutyBase: item.duty,
+                                type: isPerth ? 'perth' : 'singapore',
+                                count: duration,
+                                delay16h: false,
+                                holiday: false,
+                                calledOut: false,
+                                fileToken
+                            });
+                        }
+                    }
+                });
+
+                if (currentHolidayBlock) newProcessedTrips.push({ ...currentHolidayBlock, fileToken });
+                if (currentSbyBlock) newProcessedTrips.push({ ...currentSbyBlock, fileToken });
+
+                const updatedHistory = [...allTrips, ...newProcessedTrips];
+                updatedHistory.sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month - b.month : a.day - b.day));
+
+                const newFileEntry = {
+                    id: fileToken,
+                    name: fileName,
+                    dateUploaded: new Date().toLocaleDateString()
+                };
+
+                setAllTrips(updatedHistory);
+                setUploadedFiles([...uploadedFiles, newFileEntry]);
+                setSelectedPeriod(`08-${targetYear}`);
+                alert(lang === 'es' ? `¡Roster "${fileName}" procesado correctamente!` : `Roster "${fileName}" successfully processed!`);
+            };
+
+            const processFileObject = (file) => {
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    setRosterText(event.target.result);
+                    setPendingFileContent(event.target.result);
+                    setPendingFileName(file.name);
+                };
+                reader.readAsText(file);
+            };
+
+            const handleFileUpload = (e) => {
+                processFileObject(e.target.files[0]);
+            };
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+                setIsDragging(true);
+            };
+
+            const handleDragLeave = () => {
+                setIsDragging(false);
+            };
+
+            const handleDrop = (e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    processFileObject(e.dataTransfer.files[0]);
+                }
+            };
+
+            const handleDeleteFile = (fileId, fileName) => {
+                if (confirm(lang === 'es' ? `¿Deseas eliminar el roster "${fileName}" y todos sus turnos asociados?` : `Do you want to delete roster "${fileName}" and all associated duties?`)) {
+                    const remainingTrips = allTrips.filter(t => t.fileToken !== fileId);
+                    const remainingFiles = uploadedFiles.filter(f => f.id !== fileId);
+                    setAllTrips(remainingTrips);
+                    setUploadedFiles(remainingFiles);
+                }
+            };
+
+            const handleClearHistory = () => {
+                if (confirm(lang === 'es' ? `¿Deseas vaciar TODO el histórico de rosters para ${currentUser}?` : `Do you want to clear ALL roster history for ${currentUser}?`)) {
+                    setAllTrips([]);
+                    setUploadedFiles([]);
+                    localStorage.removeItem(`trip_history_${currentUser}`);
+                    localStorage.removeItem(`uploaded_files_${currentUser}`);
+                }
+            };
+
+            let filteredTrips = [];
+            if (selectedPeriod === 'all') {
+                filteredTrips = allTrips;
+            } else {
+                const [targetMStr, targetYStr] = selectedPeriod.split('-');
+                const targetM = parseInt(targetMStr, 10);
+                const targetY = parseInt(targetYStr, 10);
+                
+                const prevM = targetM === 1 ? 12 : targetM - 1;
+                const prevY = targetM === 1 ? targetY - 1 : targetY;
+
+                filteredTrips = allTrips.filter(f => {
+                    const endDate = getTripEndDate(f);
+                    const endM = endDate.getMonth() + 1;
+                    const endY = endDate.getFullYear();
+                    const endD = endDate.getDate();
+
+                    return (endY === prevY && endM === prevM && endD >= 16) || (endY === targetY && endM === targetM && endD <= 15);
+                });
+            }
+
+            const getTripHours = (f) => {
+                if (f.holiday) return 0;
+                if (f.type === 'sby') {
+                    if (f.calledOut) {
+                        const flightHrs = f.callType === 'perth' ? 41.4 : 26.0;
+                        const standbyPrepHrs = Math.max(0, ((f.count || 1) - 1) * 8.0); 
+                        return flightHrs + standbyPrepHrs;
+                    } else {
+                        return (f.count || 1) * 8.0;
+                    }
+                }
+                if (f.type === 'perth') return 41.4; 
+                if (f.type === 'singapore') return 26.0;
+                return 0;
+            };
+
+            const allTripsSorted = [...allTrips].sort((a, b) => new Date(b.year, b.month - 1, b.day) - new Date(a.year, a.month - 1, a.day));
+            let rollingMonthHours = 0;
+            if (allTripsSorted.length > 0) {
+                const latestTrip = allTripsSorted[0];
+                const latestDate = new Date(latestTrip.year, latestTrip.month - 1, latestTrip.day);
+                const cutoffDate = new Date(latestDate);
+                cutoffDate.setDate(cutoffDate.getDate() - 28);
+
+                rollingMonthHours = allTrips.reduce((acc, f) => {
+                    const tripDate = new Date(f.year, f.month - 1, f.day);
+                    if (tripDate >= cutoffDate && tripDate <= latestDate) {
+                        return acc + getTripHours(f);
+                    }
+                    return acc;
+                }, 0);
+            }
+
+            let rollingYearHours = 0;
+            if (allTripsSorted.length > 0) {
+                const latestTrip = allTripsSorted[0];
+                const latestDate = new Date(latestTrip.year, latestTrip.month - 1, latestTrip.day);
+                const cutoffYearDate =
