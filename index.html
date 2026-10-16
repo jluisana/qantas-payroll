@@ -64,7 +64,7 @@
                 loginTitle: "Iniciar Sesión",
                 registerTitle: "Crear Cuenta (Sign Up)",
                 forgotTitle: "Recuperar Contraseña",
-                emailLabel: "Email o Usuario:",
+                emailLabel: "Correo Electrónico:",
                 nameLabel: "Nombre de Usuario:",
                 passwordLabel: "Contraseña / PIN:",
                 loginBtn: "Entrar a la App",
@@ -116,6 +116,7 @@
                 modalYearSub: "Elige a qué año corresponde el archivo:",
                 cancel: "Cancelar",
                 confirm: "Confirmar",
+                emailNotFound: "No existe ninguna cuenta registrada con este correo electrónico.",
                 months: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
             },
             en: {
@@ -123,7 +124,7 @@
                 loginTitle: "Log In",
                 registerTitle: "Create Account (Sign Up)",
                 forgotTitle: "Recover Password",
-                emailLabel: "Email or Username:",
+                emailLabel: "Email Address:",
                 nameLabel: "Username:",
                 passwordLabel: "Password / PIN:",
                 loginBtn: "Log In to App",
@@ -175,6 +176,7 @@
                 modalYearSub: "Choose the year for this file:",
                 cancel: "Cancel",
                 confirm: "Confirm",
+                emailNotFound: "No account registered with this email address.",
                 months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
             }
         };
@@ -310,7 +312,7 @@
                 setIsActionLoading(true);
                 const { auth, createUserWithEmailAndPassword, db, doc, setDoc, updateProfile } = window.firebaseAppInstances;
                 const name = inputName.trim();
-                const email = inputEmail.trim();
+                const email = inputEmail.trim().toLowerCase();
                 const password = inputPassword.trim();
 
                 if (!name || !email || !password) {
@@ -347,29 +349,26 @@
                 setIsActionLoading(true);
 
                 const { auth, sendPasswordResetEmail, db, collection, query, where, getDocs } = window.firebaseAppInstances;
-                const userInput = inputEmail.trim();
+                const targetEmail = inputEmail.trim().toLowerCase();
 
-                if (!userInput) {
+                if (!targetEmail || !targetEmail.includes('@')) {
                     setIsActionLoading(false);
-                    alert(lang === 'es' ? 'Por favor, introduce tu usuario o correo.' : 'Please enter your username or email.');
+                    alert(lang === 'es' ? 'Por favor, introduce un correo electrónico válido.' : 'Please enter a valid email address.');
                     return;
                 }
 
                 try {
-                    let targetEmail = userInput;
+                    // Verificar si el correo realmente existe en la colección de usuarios
+                    const q = query(collection(db, "users"), where("email", "==", targetEmail));
+                    const querySnapshot = await getDocs(q);
 
-                    if (!userInput.includes('@')) {
-                        const q = query(collection(db, "users"), where("name_lowercase", "==", userInput.toLowerCase()));
-                        const querySnapshot = await getDocs(q);
-                        if (!querySnapshot.empty) {
-                            targetEmail = querySnapshot.docs[0].data().email;
-                        } else {
-                            setIsActionLoading(false);
-                            alert(lang === 'es' ? 'No se encontró ningún usuario con ese nombre.' : 'No user found with that username.');
-                            return;
-                        }
+                    if (querySnapshot.empty) {
+                        setIsActionLoading(false);
+                        alert(t.emailNotFound);
+                        return;
                     }
 
+                    // Enviar correo de recuperación
                     await sendPasswordResetEmail(auth, targetEmail);
 
                     const parts = targetEmail.split('@');
@@ -380,7 +379,11 @@
 
                     setViewMode('sent');
                 } catch (error) {
-                    alert(lang === 'es' ? 'Error al enviar correo: ' + error.message : 'Error sending email: ' + error.message);
+                    if (error.code === 'auth/user-not-found') {
+                        alert(t.emailNotFound);
+                    } else {
+                        alert(lang === 'es' ? 'Error al enviar correo: ' + error.message : 'Error sending email: ' + error.message);
+                    }
                 } finally {
                     setIsActionLoading(false);
                 }
@@ -437,7 +440,7 @@
                                 <form onSubmit={handleLogin} className="space-y-4">
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
-                                        <input type="text" placeholder="" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                        <input type="text" placeholder="tu.correo@email.com o usuario" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.passwordLabel}</label>
@@ -456,11 +459,11 @@
                                 <form onSubmit={handleRegister} className="space-y-4">
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.nameLabel}</label>
-                                        <input type="text" placeholder="" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                        <input type="text" placeholder="Ej: Jluisana" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
-                                        <input type="email" placeholder="" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
+                                        <input type="email" placeholder="tu.correo@email.com" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.passwordLabel}</label>
@@ -473,12 +476,20 @@
                                 </form>
                             )}
 
-                            {/* VISTA 3: FORGOT PASSWORD */}
+                            {/* VISTA 3: FORGOT PASSWORD (SÓLO CORREO) */}
                             {viewMode === 'forgot' && (
                                 <form onSubmit={handleForgot} className="space-y-4">
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
-                                        <input type="text" placeholder="" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                        <input 
+                                            type="email" 
+                                            placeholder="tu.correo@email.com" 
+                                            value={inputEmail} 
+                                            onChange={(e) => setInputEmail(e.target.value)} 
+                                            className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" 
+                                            required 
+                                            autoFocus 
+                                        />
                                     </div>
                                     <button type="submit" disabled={isActionLoading} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2 flex items-center justify-center gap-2 disabled:opacity-50">
                                         {isActionLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>}
