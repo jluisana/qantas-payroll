@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QrewSlip - Roster & Payroll Control</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <!-- React y Babel -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -217,7 +215,6 @@
             const [uploadedFiles, setUploadedFiles] = React.useState([]);
             const [selectedPeriod, setSelectedPeriod] = React.useState('09-2026');
 
-            // Constantes financieras globales
             const basePay = 1916.58;
             const fixedAllowance = 80.27;
             const singaporeAllowancePerTrip = 421.32; 
@@ -329,27 +326,16 @@
 
                 rawDutyList.sort((a, b) => (a.month !== b.month ? a.month - b.month : a.day - b.day));
 
-                const newProcessedTrips = [];
-                let currentHolidayBlock = null;
-                let currentSbyBlock = null;
+                const tripsMap = {};
 
                 rawDutyList.forEach(item => {
                     const isSby = item.duty === 'SBY' || item.duty === 'SR';
                     const isAL = item.duty === 'AL';
 
-                    if (currentSbyBlock && !isSby) {
-                        newProcessedTrips.push({ ...currentSbyBlock, fileToken });
-                        currentSbyBlock = null;
-                    }
-
-                    if (currentHolidayBlock && !isAL) {
-                        newProcessedTrips.push({ ...currentHolidayBlock, fileToken });
-                        currentHolidayBlock = null;
-                    }
-
                     if (isAL) {
-                        if (!currentHolidayBlock) {
-                            currentHolidayBlock = {
+                        const key = `AL_${item.year}_${item.month}`;
+                        if (!tripsMap[key]) {
+                            tripsMap[key] = {
                                 id: Date.now() + Math.random(),
                                 day: item.day,
                                 month: item.month,
@@ -361,14 +347,16 @@
                                 delay16h: false,
                                 delaySectorsCount: 1,
                                 holiday: true,
-                                calledOut: false
+                                calledOut: false,
+                                fileToken
                             };
                         } else {
-                            currentHolidayBlock.count += 1;
+                            tripsMap[key].count += 1;
                         }
                     } else if (isSby) {
-                        if (!currentSbyBlock) {
-                            currentSbyBlock = {
+                        const key = `SBY_${item.year}_${item.month}_${item.day}`;
+                        if (!tripsMap[key]) {
+                            tripsMap[key] = {
                                 id: Date.now() + Math.random(),
                                 day: item.day,
                                 month: item.month,
@@ -382,472 +370,19 @@
                                 delaySectorsCount: 1,
                                 holiday: false,
                                 calledOut: false,
-                                callType: 'singapore'
+                                callType: 'singapore',
+                                fileToken
                             };
                         } else {
-                            currentSbyBlock.count += 1;
+                            tripsMap[key].count += 1;
                         }
                     } else {
                         const isPerth = item.duty.startsWith('PRL') || item.duty === 'QF10' || item.duty === 'QF209';
                         const duration = isPerth ? 6 : 4;
+                        const key = `${item.duty}_${item.year}_${item.month}_${item.day}`;
 
-                        // Agrupación de trips: evita crear un trip duplicado si la fecha del ítem cae dentro del rango de un viaje ya existente
-                        const isOverlapping = (tripList) => tripList.some(t => {
-                            if (t.holiday) return false;
-                            const tStart = new Date(t.year, t.month - 1, t.day).getTime();
-                            const tEnd = getTripEndDate(t).getTime();
-                            const itemTime = new Date(item.year, item.month - 1, item.day).getTime();
-                            return itemTime >= tStart && itemTime <= tEnd;
-                        });
-
-                        if (!isOverlapping(newProcessedTrips)) {
-                            newProcessedTrips.push({
-                                id: Date.now() + Math.random(),
-                                day: item.day,
-                                month: item.month,
-                                year: item.year,
-                                dateStr: item.dateStr,
-                                duty: item.duty.substring(0, 5),
-                                dutyBase: item.duty,
-                                type: isPerth ? 'perth' : 'singapore',
-                                count: duration,
-                                delay16h: false,
-                                delaySectorsCount: 1,
-                                holiday: false,
-                                calledOut: false,
-                                fileToken
-                            });
-                        }
-                    }
-                });
-
-                if (currentHolidayBlock) newProcessedTrips.push({ ...currentHolidayBlock, fileToken });
-                if (currentSbyBlock) newProcessedTrips.push({ ...currentSbyBlock, fileToken });
-
-                return { rawDutyList, trips: newProcessedTrips };
-            };
-
-            const confirmAndProcessRoster = (targetYear) => {
-                const text = pendingFileContent;
-                setPendingFileContent(null);
-                if (!text || !text.trim()) return;
-
-                const fileToken = `roster_${Date.now()}`;
-                const { rawDutyList, trips: newProcessedTrips } = parseFileToTrips(text, targetYear, fileToken);
-
-                if (rawDutyList.length === 0) {
-                    alert(lang === 'es' ? 'No se pudieron leer los vuelos o turnos del archivo.' : 'Could not read flights or duties from file.');
-                    return;
-                }
-
-                const firstItem = rawDutyList[0];
-                const lastItem = rawDutyList[rawDutyList.length - 1];
-
-                const firstMonthName = t.monthsShort[firstItem.month - 1];
-                const lastMonthName = t.monthsShort[lastItem.month - 1];
-                const generatedFileName = `Roster ${firstItem.day} ${firstMonthName} - ${lastItem.day} ${lastMonthName} ${targetYear}`;
-
-                const updatedHistory = [...allTrips, ...newProcessedTrips];
-                updatedHistory.sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month - b.month : a.day - b.day));
-
-                const newFileEntry = {
-                    id: fileToken,
-                    name: generatedFileName,
-                    dateUploaded: new Date().toLocaleDateString(),
-                    rawContent: text,
-                    targetYear: targetYear
-                };
-
-                const updatedFiles = [...uploadedFiles, newFileEntry];
-                setAllTrips(updatedHistory);
-                setUploadedFiles(updatedFiles);
-                saveDataToCloud(updatedHistory, updatedFiles);
-
-                setSelectedPeriod(`${String(firstItem.month).padStart(2, '0')}-${targetYear}`);
-                alert(lang === 'es' ? `¡Roster "${generatedFileName}" procesado correctamente!` : `Roster "${generatedFileName}" successfully processed!`);
-            };
-
-            const handleRestoreTrips = () => {
-                if (uploadedFiles.length === 0) return;
-                
-                let restoredTrips = [];
-                uploadedFiles.forEach(file => {
-                    if (file.rawContent && file.targetYear) {
-                        const { trips } = parseFileToTrips(file.rawContent, file.targetYear, file.id);
-                        restoredTrips = [...restoredTrips, ...trips];
-                    }
-                });
-
-                restoredTrips.sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month - b.month : a.day - b.day));
-                setAllTrips(restoredTrips);
-                saveDataToCloud(restoredTrips, uploadedFiles);
-                alert(lang === 'es' ? '¡Se han restablecido todos los viajes a su estado original del roster!' : 'All trips have been restored to their original roster state!');
-            };
-
-            const processFileObject = (file) => {
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    setPendingFileContent(event.target.result);
-                };
-                reader.readAsText(file);
-            };
-
-            const handleFileUpload = (e) => {
-                processFileObject(e.target.files[0]);
-            };
-
-            const handleDragOver = (e) => {
-                e.preventDefault();
-                setIsDragging(true);
-            };
-
-            const handleDragLeave = () => {
-                setIsDragging(false);
-            };
-
-            const handleDrop = (e) => {
-                e.preventDefault();
-                setIsDragging(false);
-                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                    processFileObject(e.dataTransfer.files[0]);
-                }
-            };
-
-            const handleDeleteFile = (fileId, fileName) => {
-                if (confirm(lang === 'es' ? `¿Deseas eliminar el roster "${fileName}" y todos sus turnos asociados?` : `Do you want to delete roster "${fileName}" and all associated duties?`)) {
-                    const remainingTrips = allTrips.filter(t => t.fileToken !== fileId);
-                    const remainingFiles = uploadedFiles.filter(f => f.id !== fileId);
-                    setAllTrips(remainingTrips);
-                    setUploadedFiles(remainingFiles);
-                    saveDataToCloud(remainingTrips, remainingFiles);
-                }
-            };
-
-            const handleClearHistory = () => {
-                if (confirm(lang === 'es' ? `¿Deseas vaciar TODO el histórico de rosters para ${currentUser}?` : `Do you want to clear ALL roster history for ${currentUser}?`)) {
-                    setAllTrips([]);
-                    setUploadedFiles([]);
-                    saveDataToCloud([], []);
-                }
-            };
-
-            const handleLogin = async (e) => {
-                e.preventDefault();
-                if (!window.firebaseAppInstances) return;
-                setIsActionLoading(true);
-                const { auth, signInWithEmailAndPassword, db, collection, getDocs } = window.firebaseAppInstances;
-                
-                let targetInput = inputEmail.trim();
-                let targetEmail = targetInput;
-
-                if (!targetInput.includes('@')) {
-                    try {
-                        const querySnapshot = await getDocs(collection(db, "users"));
-                        let foundEmail = null;
-                        querySnapshot.forEach((docSnap) => {
-                            const data = docSnap.data();
-                            if (data.name && data.name.toLowerCase() === targetInput.toLowerCase()) {
-                                foundEmail = data.email;
-                            }
-                        });
-                        if (foundEmail) {
-                            targetEmail = foundEmail;
-                        } else {
-                            setIsActionLoading(false);
-                            alert(t.userNotFound);
-                            return;
-                        }
-                    } catch (err) {
-                        console.error(err);
-                    }
-                }
-
-                try {
-                    await signInWithEmailAndPassword(auth, targetEmail, inputPassword.trim());
-                    setInputEmail('');
-                    setInputPassword('');
-                } catch (error) {
-                    alert(lang === 'es' ? 'Usuario/Correo o contraseña incorrectos.' : 'Incorrect Username/Email or Password.');
-                } finally {
-                    setIsActionLoading(false);
-                }
-            };
-
-            const handleRegister = async (e) => {
-                e.preventDefault();
-                if (!window.firebaseAppInstances) return;
-                setIsActionLoading(true);
-                const { auth, createUserWithEmailAndPassword, db, doc, setDoc, updateProfile } = window.firebaseAppInstances;
-                const name = inputName.trim();
-                const email = inputEmail.trim().toLowerCase();
-                const password = inputPassword.trim();
-
-                if (!name || !email || !password) {
-                    setIsActionLoading(false);
-                    alert(lang === 'es' ? 'Por favor, rellena todos los campos.' : 'Please fill in all fields.');
-                    return;
-                }
-
-                try {
-                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                    await updateProfile(userCredential.user, { displayName: name });
-                    
-                    await setDoc(doc(db, "users", userCredential.user.uid), {
-                        name: name,
-                        name_lowercase: name.toLowerCase(),
-                        email: email
-                    });
-
-                    setCurrentUser(name);
-                    setCurrentUid(userCredential.user.uid);
-                    setInputName('');
-                    setInputEmail('');
-                    setInputPassword('');
-                    setViewMode('login');
-                } catch (error) {
-                    alert(lang === 'es' ? 'Error en el registro: ' + error.message : 'Registration error: ' + error.message);
-                } finally {
-                    setIsActionLoading(false);
-                }
-            };
-
-            const handleForgot = async (e) => {
-                e.preventDefault();
-                if (!window.firebaseAppInstances) return;
-                setIsActionLoading(true);
-
-                const { auth, sendPasswordResetEmail, db, collection, getDocs } = window.firebaseAppInstances;
-                let targetInput = inputEmail.trim();
-                let targetEmail = targetInput;
-
-                if (!targetInput) {
-                    setIsActionLoading(false);
-                    alert(lang === 'es' ? 'Por favor, introduce tu correo electrónico.' : 'Please enter your email address.');
-                    return;
-                }
-
-                try {
-                    if (!targetInput.includes('@')) {
-                        const querySnapshot = await getDocs(collection(db, "users"));
-                        let foundEmail = null;
-                        querySnapshot.forEach((docSnap) => {
-                            const data = docSnap.data();
-                            if (data.name && data.name.toLowerCase() === targetInput.toLowerCase()) {
-                                foundEmail = data.email;
-                            }
-                        });
-                        if (foundEmail) {
-                            targetEmail = foundEmail;
-                        } else {
-                            setIsActionLoading(false);
-                            alert(t.emailNotFound);
-                            return;
-                        }
-                    } else {
-                        const querySnapshot = await getDocs(collection(db, "users"));
-                        let found = false;
-                        querySnapshot.forEach((docSnap) => {
-                            const data = docSnap.data();
-                            if (data.email && data.email.toLowerCase() === targetInput.toLowerCase()) {
-                                found = true;
-                            }
-                        });
-                        if (!found) {
-                            setIsActionLoading(false);
-                            alert(t.emailNotFound);
-                            return;
-                        }
-                    }
-
-                    await sendPasswordResetEmail(auth, targetEmail);
-
-                    const parts = targetEmail.split('@');
-                    const usernamePart = parts[0];
-                    const domainPart = parts[1] || 'email.com';
-                    let maskedUser = usernamePart.length > 2 ? usernamePart.substring(0, 2) + '***' : '***';
-                    setMaskedEmail(`${maskedUser}@${domainPart}`);
-
-                    setViewMode('sent');
-                } catch (error) {
-                    if (error.code === 'auth/user-not-found') {
-                        alert(t.emailNotFound);
-                    } else {
-                        alert(lang === 'es' ? 'Error al enviar correo: ' + error.message : 'Error sending email: ' + error.message);
-                    }
-                } finally {
-                    setIsActionLoading(false);
-                }
-            };
-
-            const handleLogout = async () => {
-                if (!window.firebaseAppInstances) return;
-                const { auth, signOut } = window.firebaseAppInstances;
-                await signOut(auth);
-            };
-
-            if (authLoading) {
-                return (
-                    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                        <div className="text-slate-500 font-semibold text-sm flex items-center gap-2">
-                            <span className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></span>
-                            Cargando QrewSlip...
-                        </div>
-                    </div>
-                );
-            }
-
-            if (!currentUser) {
-                return (
-                    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-                        <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border border-slate-100">
-                            
-                            <div className="flex justify-center mb-6">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-md transform -rotate-3">
-                                        Q
-                                    </div>
-                                    <span className="text-2xl font-black text-slate-900 tracking-tight">Qrew<span className="text-red-600">Slip</span></span>
-                                </div>
-                            </div>
-
-                            <div className="text-center mb-6">
-                                <span className="text-[11px] font-black text-red-600 tracking-widest uppercase block">CABIN CREW PORTAL</span>
-                                <h2 className="text-xl font-bold text-slate-900 mt-1">
-                                    {viewMode === 'register' ? t.registerTitle : viewMode === 'forgot' ? t.forgotTitle : viewMode === 'sent' ? t.forgotTitle : t.loginTitle}
-                                </h2>
-                            </div>
-
-                            <div className="flex justify-center mb-6">
-                                <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold">
-                                    <button onClick={() => setLang('es')} className={`px-3 py-1.5 rounded-lg transition-colors ${lang === 'es' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600'}`}>🇪🇸 ESP</button>
-                                    <button onClick={() => setLang('en')} className={`px-3 py-1.5 rounded-lg transition-colors ${lang === 'en' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600'}`}>🇬🇧 ENG</button>
-                                </div>
-                            </div>
-
-                            {viewMode === 'login' && (
-                                <form onSubmit={handleLogin} className="space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
-                                        <input type="text" placeholder={t.emailPlaceholder} value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.passwordLabel}</label>
-                                        <input type="password" placeholder="••••••••" value={inputPassword} onChange={(e) => setInputPassword(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
-                                    </div>
-
-                                    <button type="submit" disabled={isActionLoading} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2 flex items-center justify-center gap-2 disabled:opacity-50">
-                                        {isActionLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>}
-                                        {isActionLoading ? t.sendingBtn : t.loginBtn}
-                                    </button>
-                                </form>
-                            )}
-
-                            {viewMode === 'register' && (
-                                <form onSubmit={handleRegister} className="space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.nameLabel}</label>
-                                        <input type="text" placeholder={t.namePlaceholder} value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1">Correo Electrónico:</label>
-                                        <input type="email" placeholder="tu.correo@email.com" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.passwordLabel}</label>
-                                        <input type="password" placeholder="••••••••" value={inputPassword} onChange={(e) => setInputPassword(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
-                                    </div>
-                                    <button type="submit" disabled={isActionLoading} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2 flex items-center justify-center gap-2 disabled:opacity-50">
-                                        {isActionLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>}
-                                        {isActionLoading ? t.sendingBtn : t.registerBtn}
-                                    </button>
-                                </form>
-                            )}
-
-                            {viewMode === 'forgot' && (
-                                <form onSubmit={handleForgot} className="space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
-                                        <input 
-                                            type="text" 
-                                            placeholder={t.emailPlaceholder} 
-                                            value={inputEmail} 
-                                            onChange={(e) => setInputEmail(e.target.value)} 
-                                            className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" 
-                                            required 
-                                            autoFocus 
-                                        />
-                                    </div>
-                                    <button type="submit" disabled={isActionLoading} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2 flex items-center justify-center gap-2 disabled:opacity-50">
-                                        {isActionLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>}
-                                        {isActionLoading ? t.sendingBtn : t.recoverBtn}
-                                    </button>
-                                    <div className="text-center pt-2">
-                                        <button type="button" onClick={() => { setViewMode('login'); setInputEmail(''); }} className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors">
-                                            {t.backToLogin}
-                                        </button>
-                                    </div>
-                                </form>
-                            )}
-
-                            {viewMode === 'sent' && (
-                                <div className="space-y-4 text-center py-2">
-                                    <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-xl font-bold">✓</div>
-                                    <p className="text-xs text-slate-600 leading-relaxed">
-                                        {lang === 'es' ? 'El enlace de recuperación se ha enviado a ' : 'The recovery link has been sent to '}
-                                        <b className="text-slate-900">{maskedEmail}</b>
-                                    </p>
-                                    <button onClick={() => { setViewMode('login'); setInputEmail(''); }} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-sm transition-colors mt-4">
-                                        {t.backToLogin}
-                                    </button>
-                                </div>
-                            )}
-
-                            {viewMode === 'login' && (
-                                <div className="mt-5 text-center space-y-2 border-t border-slate-100 pt-4">
-                                    <div>
-                                        <button 
-                                            type="button" 
-                                            onClick={() => { setViewMode('forgot'); setInputEmail(''); }} 
-                                            className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
-                                        >
-                                            {t.forgotPasswordLink}
-                                        </button>
-                                    </div>
-                                    <div>
-                                        <button 
-                                            onClick={() => { setViewMode('register'); setInputName(''); setInputEmail(''); setInputPassword(''); }} 
-                                            className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
-                                        >
-                                            {t.switchToRegister}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {viewMode === 'register' && (
-                                <div className="mt-5 text-center border-t border-slate-100 pt-4">
-                                    <button 
-                                        onClick={() => { setViewMode('login'); setInputName(''); setInputEmail(''); setInputPassword(''); }} 
-                                        className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
-                                    >
-                                        {t.switchToLogin}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                );
-            }
-
-            const getPeriodStatus = (monthStr, yearNum) => {
-                const targetM = parseInt(monthStr, 10);
-                const targetY = yearNum;
-                
-                const prevM = targetM === 1 ? 12 : targetM - 1;
-                const prevY = targetM === 1 ? targetY - 1 : targetY;
-
-                const periodTrips = allTrips.filter(f => {
-                    const endDate = getTripEndDate(f);
-                    const endM = endDate.getMonth() + 1;
-                    const
+                        let skip = false;
+                        Object.values(tripsMap).forEach(existingTrip => {
+                            if (!existingTrip.holiday && existingTrip.type !== 'sby') {
+                                const eStart = new Date(existingTrip.year, existingTrip.month - 1, existingTrip.day).getTime();
+                                const eEnd
