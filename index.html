@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QrewSlip - Roster & Payroll Control</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- React y Babel -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -215,6 +217,7 @@
             const [uploadedFiles, setUploadedFiles] = React.useState([]);
             const [selectedPeriod, setSelectedPeriod] = React.useState('09-2026');
 
+            // Constantes financieras globales
             const basePay = 1916.58;
             const fixedAllowance = 80.27;
             const singaporeAllowancePerTrip = 421.32; 
@@ -239,150 +242,3 @@
                 const checkInterval = setInterval(() => {
                     if (window.firebaseAppInstances) {
                         clearInterval(checkInterval);
-                        const { auth, onAuthStateChanged, db, doc, getDoc } = window.firebaseAppInstances;
-                        
-                        onAuthStateChanged(auth, async (user) => {
-                            if (user) {
-                                setCurrentUid(user.uid);
-                                setCurrentEmail(user.email);
-                                let name = user.displayName;
-                                if (!name && db && doc && getDoc) {
-                                    try {
-                                        const userDoc = await getDoc(doc(db, "users", user.uid));
-                                        if (userDoc.exists()) {
-                                            name = userDoc.data().name;
-                                        }
-                                    } catch (e) {
-                                        console.error(e);
-                                    }
-                                }
-                                setCurrentUser(name || user.email.split('@')[0]);
-                            } else {
-                                setCurrentUser(null);
-                                setCurrentUid(null);
-                                setCurrentEmail('');
-                            }
-                            setAuthLoading(false);
-                        });
-                    }
-                }, 100);
-            }, []);
-
-            React.useEffect(() => {
-                if (!currentUid || !window.firebaseAppInstances) return;
-                const { db, doc, onSnapshot } = window.firebaseAppInstances;
-
-                const unsubscribe = onSnapshot(doc(db, "crew_data", currentUid), (docSnap) => {
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
-                        if (data.trips) setAllTrips(data.trips);
-                        if (data.files) setUploadedFiles(data.files);
-                    }
-                });
-
-                return () => unsubscribe();
-            }, [currentUid]);
-
-            const saveDataToCloud = async (newTrips, newFiles) => {
-                if (!currentUid || !window.firebaseAppInstances) return;
-                const { db, doc, setDoc } = window.firebaseAppInstances;
-                try {
-                    await setDoc(doc(db, "crew_data", currentUid), {
-                        trips: newTrips,
-                        files: newFiles
-                    }, { merge: true });
-                } catch (e) {
-                    console.error("Error guardando datos:", e);
-                }
-            };
-
-            const parseFileToTrips = (text, targetYear, fileToken) => {
-                const lines = text.split(/\r?\n/);
-                let rawDutyList = [];
-
-                lines.forEach(line => {
-                    if (line.includes('|') && line.match(/\b\d{2}\/\d{2}\b/)) {
-                        const columns = line.split('|');
-                        columns.forEach(col => {
-                            const trimmedCol = col.trim();
-                            const matchPattern = trimmedCol.match(/(\d{2})\/(\d{2})\s+[A-Z]?\s*(SIL\d+|PRL[A-Z0-9]*|QF\d+|SBY|SR|AL)/);
-                            if (matchPattern) {
-                                let day = parseInt(matchPattern[1], 10);
-                                let month = parseInt(matchPattern[2], 10);
-
-                                rawDutyList.push({
-                                    day,
-                                    month,
-                                    year: targetYear,
-                                    dateStr: `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${targetYear}`,
-                                    duty: matchPattern[3]
-                                });
-                            }
-                        });
-                    }
-                });
-
-                if (rawDutyList.length === 0) return { rawDutyList: [], trips: [] };
-
-                rawDutyList.sort((a, b) => (a.month !== b.month ? a.month - b.month : a.day - b.day));
-
-                const tripsMap = {};
-
-                rawDutyList.forEach(item => {
-                    const isSby = item.duty === 'SBY' || item.duty === 'SR';
-                    const isAL = item.duty === 'AL';
-
-                    if (isAL) {
-                        const key = `AL_${item.year}_${item.month}`;
-                        if (!tripsMap[key]) {
-                            tripsMap[key] = {
-                                id: Date.now() + Math.random(),
-                                day: item.day,
-                                month: item.month,
-                                year: item.year,
-                                dateStr: item.dateStr,
-                                duty: lang === 'es' ? 'Vacaciones (AL)' : 'Holiday (AL)',
-                                type: 'holiday',
-                                count: 1,
-                                delay16h: false,
-                                delaySectorsCount: 1,
-                                holiday: true,
-                                calledOut: false,
-                                fileToken
-                            };
-                        } else {
-                            tripsMap[key].count += 1;
-                        }
-                    } else if (isSby) {
-                        const key = `SBY_${item.year}_${item.month}_${item.day}`;
-                        if (!tripsMap[key]) {
-                            tripsMap[key] = {
-                                id: Date.now() + Math.random(),
-                                day: item.day,
-                                month: item.month,
-                                year: item.year,
-                                dateStr: item.dateStr,
-                                duty: 'Bloque SBY (Standby)',
-                                dutyBase: 'SBY',
-                                type: 'sby',
-                                count: 1,
-                                delay16h: false,
-                                delaySectorsCount: 1,
-                                holiday: false,
-                                calledOut: false,
-                                callType: 'singapore',
-                                fileToken
-                            };
-                        } else {
-                            tripsMap[key].count += 1;
-                        }
-                    } else {
-                        const isPerth = item.duty.startsWith('PRL') || item.duty === 'QF10' || item.duty === 'QF209';
-                        const duration = isPerth ? 6 : 4;
-                        const key = `${item.duty}_${item.year}_${item.month}_${item.day}`;
-
-                        let skip = false;
-                        Object.values(tripsMap).forEach(existingTrip => {
-                            if (!existingTrip.holiday && existingTrip.type !== 'sby') {
-                                const eStart = new Date(existingTrip.year, existingTrip.month - 1, existingTrip.day).getTime();
-                                const eEnd
