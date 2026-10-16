@@ -14,6 +14,41 @@
 <body class="bg-slate-50 text-slate-800">
     <div id="root"></div>
 
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+        import { 
+            getAuth, 
+            signInWithEmailAndPassword, 
+            createUserWithEmailAndPassword, 
+            sendPasswordResetEmail, 
+            signOut, 
+            onAuthStateChanged,
+            updateProfile
+        } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            onSnapshot 
+        } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBd3Nml9zPcVJUuoMsUzVkVXPabOkbeUgw",
+            authDomain: "qrew-33b1c.firebaseapp.com",
+            projectId: "qrew-33b1c",
+            storageBucket: "qrew-33b1c.firebasestorage.app",
+            messagingSenderId: "716061171558",
+            appId: "1:716061171558:web:1104257b891a7d3d76f2a7"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.firebaseAppInstances = { auth, db, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged, doc, getDoc, setDoc, onSnapshot, updateProfile };
+    </script>
+
     <script type="text/babel">
         const translations = {
             es: {
@@ -21,8 +56,8 @@
                 loginTitle: "Iniciar Sesión",
                 registerTitle: "Crear Cuenta (Sign Up)",
                 forgotTitle: "Recuperar Contraseña",
-                emailLabel: "Correo Electrónico (para recuperación):",
-                nameLabel: "Nombre de Usuario:",
+                emailLabel: "Correo Electrónico (para login / recuperación):",
+                nameLabel: "Nombre de Tripulante:",
                 passwordLabel: "Contraseña / PIN:",
                 loginBtn: "Entrar a la App",
                 registerBtn: "Registrarse",
@@ -79,8 +114,8 @@
                 loginTitle: "Log In",
                 registerTitle: "Create Account (Sign Up)",
                 forgotTitle: "Recover Password",
-                emailLabel: "Email (for recovery):",
-                nameLabel: "Username:",
+                emailLabel: "Email (for login / recovery):",
+                nameLabel: "Crew Member Name:",
                 passwordLabel: "Password / PIN:",
                 loginBtn: "Log In to App",
                 registerBtn: "Register",
@@ -138,22 +173,14 @@
             const [lang, setLang] = React.useState('es');
             const t = translations[lang];
 
-            const [usersData, setUsersData] = React.useState(() => {
-                const saved = localStorage.getItem('qantas_users_credentials_v2');
-                return saved ? JSON.parse(saved) : [
-                    { name: 'Julia', email: 'julia@qantas.com', password: '1234' }
-                ];
-            });
+            const [currentUser, setCurrentUser] = React.useState(null);
+            const [currentEmail, setCurrentEmail] = React.useState('');
+            const [authLoading, setAuthLoading] = React.useState(true);
 
-            const [currentUser, setCurrentUser] = React.useState(() => {
-                return localStorage.getItem('qantas_current_session') || null;
-            });
-
-            const [viewMode, setViewMode] = React.useState('login'); // 'login', 'register', 'forgot', 'sent'
+            const [viewMode, setViewMode] = React.useState('login'); 
             const [inputName, setInputName] = React.useState('');
             const [inputEmail, setInputEmail] = React.useState('');
             const [inputPassword, setInputPassword] = React.useState('');
-            const [maskedEmail, setMaskedEmail] = React.useState('');
 
             const [rosterText, setRosterText] = React.useState('');
             const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -169,43 +196,87 @@
             const [uploadedFiles, setUploadedFiles] = React.useState([]);
             const [selectedPeriod, setSelectedPeriod] = React.useState('09-2026');
 
+            // Detectar estado de autenticación en Firebase
             React.useEffect(() => {
-                if (currentUser) {
-                    localStorage.setItem('qantas_current_session', currentUser);
-                    const savedTrips = localStorage.getItem(`trip_history_${currentUser}`);
-                    setAllTrips(savedTrips ? JSON.parse(savedTrips) : []);
-                    const savedFiles = localStorage.getItem(`uploaded_files_${currentUser}`);
-                    setUploadedFiles(savedFiles ? JSON.parse(savedFiles) : []);
-                } else {
-                    localStorage.removeItem('qantas_current_session');
-                }
+                const checkInterval = setInterval(() => {
+                    if (window.firebaseAppInstances) {
+                        clearInterval(checkInterval);
+                        const { auth, onAuthStateChanged, db, doc, getDoc } = window.firebaseAppInstances;
+                        
+                        onAuthStateChanged(auth, async (user) => {
+                            if (user) {
+                                setCurrentEmail(user.email);
+                                let name = user.displayName;
+                                if (!name && db && doc && getDoc) {
+                                    try {
+                                        const userDoc = await getDoc(doc(db, "users", user.uid));
+                                        if (userDoc.exists()) {
+                                            name = userDoc.data().name;
+                                        }
+                                    } catch (e) {
+                                        console.error(e);
+                                    }
+                                }
+                                setCurrentUser(name || user.email.split('@')[0]);
+                            } else {
+                                setCurrentUser(null);
+                                setCurrentEmail('');
+                            }
+                            setAuthLoading(false);
+                        });
+                    }
+                }, 100);
+            }, []);
+
+            // Sincronizar trips y files con Firestore en tiempo real
+            React.useEffect(() => {
+                if (!currentUser || !window.firebaseAppInstances) return;
+                const { db, doc, onSnapshot } = window.firebaseAppInstances;
+                const userUid = auth && auth.currentUser ? auth.currentUser.uid : currentUser;
+
+                const unsubscribe = onSnapshot(doc(db, "crew_data", userUid), (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        if (data.trips) setAllTrips(data.trips);
+                        if (data.files) setUploadedFiles(data.files);
+                    }
+                });
+
+                return () => unsubscribe();
             }, [currentUser]);
 
-            React.useEffect(() => {
-                if (currentUser) {
-                    localStorage.setItem(`trip_history_${currentUser}`, JSON.stringify(allTrips));
-                    localStorage.setItem(`uploaded_files_${currentUser}`, JSON.stringify(uploadedFiles));
-                }
-            }, [allTrips, uploadedFiles, currentUser]);
-
-            React.useEffect(() => {
-                localStorage.setItem('qantas_users_credentials_v2', JSON.stringify(usersData));
-            }, [usersData]);
-
-            const handleLogin = (e) => {
-                e.preventDefault();
-                const userObj = usersData.find(u => u.name.toLowerCase() === inputName.trim().toLowerCase());
-                if (userObj && userObj.password === inputPassword.trim()) {
-                    setCurrentUser(userObj.name);
-                    setInputName('');
-                    setInputPassword('');
-                } else {
-                    alert(lang === 'es' ? 'Usuario o contraseña incorrectos.' : 'Incorrect username or password.');
+            const saveDataToCloud = async (newTrips, newFiles) => {
+                if (!window.firebaseAppInstances) return;
+                const { db, doc, setDoc } = window.firebaseAppInstances;
+                const userUid = auth && auth.currentUser ? auth.currentUser.uid : currentUser;
+                try {
+                    await setDoc(doc(db, "crew_data", userUid), {
+                        trips: newTrips,
+                        files: newFiles
+                    }, { merge: true });
+                } catch (e) {
+                    console.error("Error guardando en la nube:", e);
                 }
             };
 
-            const handleRegister = (e) => {
+            const handleLogin = async (e) => {
                 e.preventDefault();
+                if (!window.firebaseAppInstances) return;
+                const { auth, signInWithEmailAndPassword } = window.firebaseAppInstances;
+                try {
+                    // El inputName puede ser email o se puede usar el email directamente
+                    await signInWithEmailAndPassword(auth, inputEmail.trim(), inputPassword.trim());
+                    setInputEmail('');
+                    setInputPassword('');
+                } catch (error) {
+                    alert(lang === 'es' ? 'Error al iniciar sesión: ' + error.message : 'Login error: ' + error.message);
+                }
+            };
+
+            const handleRegister = async (e) => {
+                e.preventDefault();
+                if (!window.firebaseAppInstances) return;
+                const { auth, createUserWithEmailAndPassword, db, doc, setDoc, updateProfile } = window.firebaseAppInstances;
                 const name = inputName.trim();
                 const email = inputEmail.trim();
                 const password = inputPassword.trim();
@@ -215,51 +286,60 @@
                     return;
                 }
 
-                if (usersData.some(u => u.name.toLowerCase() === name.toLowerCase())) {
-                    alert(lang === 'es' ? 'Este nombre de usuario ya está registrado.' : 'This username is already registered.');
+                try {
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    await updateProfile(userCredential.user, { displayName: name });
+                    
+                    await setDoc(doc(db, "users", userCredential.user.uid), {
+                        name: name,
+                        email: email
+                    });
+
+                    setCurrentUser(name);
+                    setInputName('');
+                    setInputEmail('');
+                    setInputPassword('');
+                    setViewMode('login');
+                } catch (error) {
+                    alert(lang === 'es' ? 'Error en el registro: ' + error.message : 'Registration error: ' + error.message);
+                }
+            };
+
+            const handleForgot = async (e) => {
+                e.preventDefault();
+                if (!window.firebaseAppInstances) return;
+                const { auth, sendPasswordResetEmail } = window.firebaseAppInstances;
+                const email = inputEmail.trim();
+
+                if (!email) {
+                    alert(lang === 'es' ? 'Por favor, introduce tu correo electrónico.' : 'Please enter your email.');
                     return;
                 }
 
-                const newUser = { name, email, password };
-                const updatedUsers = [...usersData, newUser];
-                setUsersData(updatedUsers);
-                setCurrentUser(name);
-                setInputName('');
-                setInputEmail('');
-                setInputPassword('');
-                setViewMode('login');
-            };
-
-            const handleForgot = (e) => {
-                e.preventDefault();
-                const name = inputName.trim();
-                const userObj = usersData.find(u => u.name.toLowerCase() === name.toLowerCase());
-                
-                if (userObj) {
-                    const email = userObj.email;
-                    const parts = email.split('@');
-                    const usernamePart = parts[0];
-                    const domainPart = parts[1];
-                    
-                    let maskedUser = usernamePart;
-                    if (usernamePart.length > 2) {
-                        maskedUser = usernamePart.substring(0, 2) + '***';
-                    } else {
-                        maskedUser = '***';
-                    }
-                    
-                    setMaskedEmail(`${maskedUser}@${domainPart}`);
-                    setViewMode('sent');
-                } else {
-                    alert(lang === 'es' ? 'No se encontró ningún usuario con ese nombre.' : 'No user found with that name.');
+                try {
+                    await sendPasswordResetEmail(auth, email);
+                    alert(lang === 'es' ? `¡Enlace de recuperación enviado con éxito a ${email}!` : `Recovery link successfully sent to ${email}!`);
+                    setViewMode('login');
+                    setInputEmail('');
+                } catch (error) {
+                    alert(lang === 'es' ? 'Error al enviar correo: ' + error.message : 'Error sending email: ' + error.message);
                 }
             };
 
-            const handleLogout = () => {
-                setCurrentUser(null);
+            const handleLogout = async () => {
+                if (!window.firebaseAppInstances) return;
+                const { auth, signOut } = window.firebaseAppInstances;
+                await signOut(auth);
             };
 
-            // PANTALLA DE ACCESO (LOGIN / REGISTER / FORGOT)
+            if (authLoading) {
+                return (
+                    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                        <div className="text-slate-500 font-semibold text-sm">Cargando portal...</div>
+                    </div>
+                );
+            }
+
             if (!currentUser) {
                 return (
                     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -278,7 +358,7 @@
                             <div className="text-center mb-6">
                                 <span className="text-[11px] font-black text-red-600 tracking-widest uppercase block">CABIN CREW PORTAL</span>
                                 <h2 className="text-xl font-bold text-slate-900 mt-1">
-                                    {viewMode === 'register' ? t.registerTitle : viewMode === 'forgot' ? t.forgotTitle : viewMode === 'sent' ? t.forgotTitle : t.loginTitle}
+                                    {viewMode === 'register' ? t.registerTitle : viewMode === 'forgot' ? t.forgotTitle : t.loginTitle}
                                 </h2>
                             </div>
 
@@ -293,18 +373,12 @@
                             {viewMode === 'login' && (
                                 <form onSubmit={handleLogin} className="space-y-4">
                                     <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.nameLabel}</label>
-                                        <input type="text" placeholder="Ej: Julia" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
+                                        <input type="email" placeholder="tucorreo@qantas.com" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.passwordLabel}</label>
                                         <input type="password" placeholder="••••••••" value={inputPassword} onChange={(e) => setInputPassword(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
-                                    </div>
-
-                                    <div className="text-right pt-1">
-                                        <button type="button" onClick={() => { setViewMode('forgot'); setInputName(''); }} className="text-xs font-semibold text-slate-500 hover:text-red-600 transition-colors">
-                                            {t.forgotPasswordLink}
-                                        </button>
                                     </div>
 
                                     <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2">
@@ -338,42 +412,50 @@
                             {viewMode === 'forgot' && (
                                 <form onSubmit={handleForgot} className="space-y-4">
                                     <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.nameLabel}</label>
-                                        <input type="text" placeholder="Introduce tu usuario" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
+                                        <input type="email" placeholder="Introduce tu correo" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
                                     </div>
                                     <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2">
                                         {t.recoverBtn}
                                     </button>
                                     <div className="text-center pt-2">
-                                        <button type="button" onClick={() => { setViewMode('login'); setInputName(''); }} className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors">
+                                        <button type="button" onClick={() => { setViewMode('login'); setInputEmail(''); }} className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors">
                                             {t.backToLogin}
                                         </button>
                                     </div>
                                 </form>
                             )}
 
-                            {/* VISTA 4: SENT CONFIRMATION (ESTILO BANCO) */}
-                            {viewMode === 'sent' && (
-                                <div className="space-y-4 text-center py-2">
-                                    <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-xl font-bold">✓</div>
-                                    <p className="text-xs text-slate-600 leading-relaxed">
-                                        {lang === 'es' ? 'El enlace de recuperación se ha enviado a ' : 'The recovery link has been sent to '}
-                                        <b className="text-slate-900">{maskedEmail}</b>
-                                    </p>
-                                    <button onClick={() => { setViewMode('login'); setInputName(''); }} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-sm transition-colors mt-4">
-                                        {t.backToLogin}
-                                    </button>
+                            {/* ENLACES INFERIORES */}
+                            {viewMode === 'login' && (
+                                <div className="mt-5 text-center space-y-2 border-t border-slate-100 pt-4">
+                                    <div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => { setViewMode('forgot'); setInputEmail(''); }} 
+                                            className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
+                                        >
+                                            {t.forgotPasswordLink}
+                                        </button>
+                                    </div>
+                                    <div>
+                                        <button 
+                                            onClick={() => { setViewMode('register'); setInputName(''); setInputEmail(''); setInputPassword(''); }} 
+                                            className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
+                                        >
+                                            {t.switchToRegister}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 
-                            {/* ENLACES INFERIORES DE CAMBIO */}
-                            {viewMode !== 'forgot' && viewMode !== 'sent' && (
-                                <div className="mt-6 text-center border-t border-slate-100 pt-4">
+                            {viewMode === 'register' && (
+                                <div className="mt-5 text-center border-t border-slate-100 pt-4">
                                     <button 
-                                        onClick={() => { setViewMode(viewMode === 'register' ? 'login' : 'register'); setInputName(''); setInputEmail(''); setInputPassword(''); }} 
+                                        onClick={() => { setViewMode('login'); setInputName(''); setInputEmail(''); setInputPassword(''); }} 
                                         className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
                                     >
-                                        {viewMode === 'register' ? t.switchToLogin : t.switchToRegister}
+                                        {t.switchToLogin}
                                     </button>
                                 </div>
                             )}
@@ -566,8 +648,11 @@
                     dateUploaded: new Date().toLocaleDateString()
                 };
 
+                const updatedFiles = [...uploadedFiles, newFileEntry];
                 setAllTrips(updatedHistory);
-                setUploadedFiles([...uploadedFiles, newFileEntry]);
+                setUploadedFiles(updatedFiles);
+                saveDataToCloud(updatedHistory, updatedFiles);
+
                 setSelectedPeriod(`09-${targetYear}`);
                 alert(lang === 'es' ? `¡Roster "${fileName}" procesado correctamente!` : `Roster "${fileName}" successfully processed!`);
             };
@@ -610,6 +695,7 @@
                     const remainingFiles = uploadedFiles.filter(f => f.id !== fileId);
                     setAllTrips(remainingTrips);
                     setUploadedFiles(remainingFiles);
+                    saveDataToCloud(remainingTrips, remainingFiles);
                 }
             };
 
@@ -617,8 +703,7 @@
                 if (confirm(lang === 'es' ? `¿Deseas vaciar TODO el histórico de rosters para ${currentUser}?` : `Do you want to clear ALL roster history for ${currentUser}?`)) {
                     setAllTrips([]);
                     setUploadedFiles([]);
-                    localStorage.removeItem(`trip_history_${currentUser}`);
-                    localStorage.removeItem(`uploaded_files_${currentUser}`);
+                    saveDataToCloud([], []);
                 }
             };
 
@@ -737,388 +822,16 @@
             const estimatedNet = estimatedGross - totalDeductions;
 
             const handleDeleteTrip = (id) => {
-                setAllTrips(allTrips.filter(t => t.id !== id));
+                const updated = allTrips.filter(t => t.id !== id);
+                setAllTrips(updated);
+                saveDataToCloud(updated, uploadedFiles);
             };
 
             const toggleDelay = (id) => {
-                setAllTrips(allTrips.map(t => t.id === id ? {...t, delay16h: !t.delay16h} : t));
+                const updated = allTrips.map(t => t.id === id ? {...t, delay16h: !t.delay16h} : t);
+                setAllTrips(updated);
+                saveDataToCloud(updated, uploadedFiles);
             };
 
             const setDelaySectors = (id, count) => {
-                setAllTrips(allTrips.map(t => t.id === id ? {...t, delaySectorsCount: parseInt(count, 10)} : t));
-            };
-
-            const toggleCallOut = (id) => {
-                setAllTrips(allTrips.map(t => {
-                    if (t.id === id) {
-                        const nextCalled = !t.calledOut;
-                        return {
-                            ...t,
-                            calledOut: nextCalled,
-                            callType: nextCalled ? 'singapore' : 'singapore'
-                        };
-                    }
-                    return t;
-                }));
-            };
-
-            const setSbyCallType = (id, type) => {
-                setAllTrips(allTrips.map(t => t.id === id ? {...t, callType: type} : t));
-            };
-
-            const currentYear = new Date().getFullYear();
-            const availableYears = [];
-            for (let y = 2025; y <= currentYear; y++) {
-                availableYears.push(y);
-            }
-
-            const [targetMShow, targetYShow] = selectedPeriod !== 'all' ? selectedPeriod.split('-') : [null, null];
-            const currentMonthName = targetMShow ? t.months[parseInt(targetMShow, 10) - 1] : '';
-            const currentLabel = selectedPeriod === 'all' ? t.viewAll : `${currentMonthName} ${targetYShow}`;
-            
-            const currentPeriodStatus = selectedPeriod !== 'all' ? getPeriodStatus(targetMShow, parseInt(targetYShow, 10)) : 'all';
-
-            return (
-                <div className="max-w-5xl mx-auto p-4 sm:p-6 pb-12 relative">
-                    
-                    {pendingFileContent && (
-                        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-                            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
-                                <h3 className="text-lg font-bold text-slate-900 mb-2">{t.modalYearTitle}</h3>
-                                <p className="text-xs text-slate-500 mb-4">{t.modalYearSub} <b>{currentUser}</b>:</p>
-                                <select 
-                                    value={selectedModalYear}
-                                    onChange={(e) => setSelectedModalYear(e.target.value)}
-                                    className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 mb-6"
-                                >
-                                    {availableYears.map(y => (
-                                        <option key={y} value={y}>{y}</option>
-                                    ))}
-                                </select>
-                                <div className="flex gap-3">
-                                    <button onClick={() => setPendingFileContent(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-xl text-sm transition-colors">{t.cancel}</button>
-                                    <button onClick={() => confirmAndProcessRoster(parseInt(selectedModalYear, 10))} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm">{t.confirm}</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* CABECERA CON BOTÓN DE LOG OUT */}
-                    <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4 border-b border-slate-200 pb-6">
-                        <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-center sm:justify-start">
-                            <div className="h-9 sm:h-11 w-auto flex items-center">
-                                <svg className="h-full w-auto" viewBox="0 0 260 50" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M5 5 C25 5 60 5 65 5 C65 18 50 42 42 45 C18 45 12 45 12 45 Z" fill="#E40000" />
-                                    <path d="M18 16 C24 18 32 26 34 30 C35 33 33 34 31 34 C29 34 26 31 24 29 C22 25 17 21 12 19 C10 18 8 17 10 16 C12 15 15 15 18 16 Z" fill="#FFFFFF" />
-                                    <text x="75" y="36" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="32" fontStyle="italic" fill="#0D0D0D" letterSpacing="-1">QANTAS</text>
-                                </svg>
-                            </div>
-                            <div className="border-l border-slate-200 pl-3">
-                                <span className="text-[10px] sm:text-[11px] font-black text-red-600 tracking-widest uppercase block leading-tight">CABIN CREW</span>
-                                <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 tracking-wider uppercase block">Roster & Payroll</span>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 w-full sm:w-auto justify-center">
-                            <div className="flex bg-slate-200/70 p-1 rounded-xl text-xs font-bold">
-                                <button onClick={() => setLang('es')} className={`px-3 py-1.5 rounded-lg transition-colors ${lang === 'es' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600'}`}>🇪🇸 ESP</button>
-                                <button onClick={() => setLang('en')} className={`px-3 py-1.5 rounded-lg transition-colors ${lang === 'en' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600'}`}>🇬🇧 ENG</button>
-                            </div>
-
-                            <div className="flex items-center gap-2 bg-white p-2 rounded-2xl shadow-xs border border-slate-200">
-                                <span className="text-xs font-bold text-slate-700 pl-2">👤 {currentUser}</span>
-                                <button onClick={handleLogout} className="bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs px-3 py-2 rounded-xl transition-colors">{t.logout}</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="text-center mb-8">
-                        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">{t.subtitle}</h2>
-                    </div>
-
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4 relative">
-                        <div className="w-full sm:w-auto relative">
-                            <span className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">{t.activePeriod} ({currentUser}):</span>
-                            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="w-full sm:w-80 bg-slate-50 hover:bg-slate-100 border border-slate-300 font-semibold py-3 px-4 rounded-xl text-sm flex items-center justify-between transition-colors shadow-2xs">
-                                <div className="flex items-center gap-2.5">
-                                    {selectedPeriod !== 'all' ? (
-                                        <span className={`w-3 h-3 rounded-full ${
-                                            currentPeriodStatus === 'complete' ? 'bg-emerald-500 ring-2 ring-emerald-100' : 'bg-slate-300'
-                                        }`}></span>
-                                    ) : (<span className="text-red-600 font-bold">🔍</span>)}
-                                    <span className="text-slate-800">{currentLabel}</span>
-                                </div>
-                                <span className={`text-slate-400 transform transition-transform duration-200 ${isMenuOpen ? 'rotate-180' : ''}`}>▼</span>
-                            </button>
-
-                            {isMenuOpen && (
-                                <div className="absolute top-full left-0 mt-2 w-full sm:w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-40 p-3 space-y-3 max-h-96 overflow-y-auto">
-                                    {availableYears.sort((a, b) => b - a).map(year => (
-                                        <div key={year} className="border-b border-slate-100 pb-2 last:border-0">
-                                            <button onClick={() => setExpandedYear(expandedYear === String(year) ? null : String(year))} className="w-full flex items-center justify-between text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 p-2.5 rounded-lg transition-colors">
-                                                <span>{year}</span>
-                                                <span>{expandedYear === String(year) ? '▲' : '▼'}</span>
-                                            </button>
-                                            {expandedYear === String(year) && (
-                                                <div className="mt-1.5 pl-2 space-y-1">
-                                                    {t.months.map((monthName, idx) => {
-                                                        const mNum = String(idx + 1).padStart(2, '0');
-                                                        const status = getPeriodStatus(mNum, year);
-                                                        const periodKey = `${mNum}-${year}`;
-                                                        const isSelected = selectedPeriod === periodKey;
-                                                        return (
-                                                            <button key={periodKey} onClick={() => { setSelectedPeriod(periodKey); setIsMenuOpen(false); }} className={`w-full flex items-center justify-between p-2 rounded-xl text-xs font-medium transition-colors text-left ${isSelected ? 'bg-red-50 text-red-700 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}>
-                                                                <span>{monthName} {year}</span>
-                                                                <span className={`w-3 h-3 rounded-full flex-shrink-0 ${
-                                                                    status === 'complete' ? 'bg-emerald-500 ring-2 ring-emerald-100' : 'bg-slate-300'
-                                                                }`}></span>
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                    <div className="pt-2 border-t border-slate-100">
-                                        <button onClick={() => { setSelectedPeriod('all'); setIsMenuOpen(false); }} className="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-medium hover:bg-slate-50 text-red-600 font-semibold">
-                                            <span>🔍 {t.viewAll}</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {allTrips.length > 0 && (
-                            <button onClick={handleClearHistory} className="text-red-500 hover:text-red-700 text-xs font-medium underline">
-                                {t.clearHistory} ({allTrips.length})
-                            </button>
-                        )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.baseFixed}</span>
-                            <h2 className="text-2xl font-bold text-slate-900 mt-1">£{(basePay + fixedAllowance).toFixed(2)}</h2>
-                        </div>
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.sectorsAllowances}</span>
-                            <h2 className="text-2xl font-bold text-red-600 mt-1">£{(calculatedSectorPay + calculatedAllowances + calculatedHolidayPay).toFixed(2)}</h2>
-                        </div>
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.estGross}</span>
-                            <h2 className="text-2xl font-bold text-slate-800 mt-1">£{estimatedGross.toFixed(2)}</h2>
-                        </div>
-                        <div className="bg-red-600 text-white p-5 rounded-2xl shadow-md transition-all">
-                            <span className="text-xs font-bold uppercase tracking-wider text-red-100">{t.estNet}</span>
-                            <h2 className="text-2xl font-black text-white mt-1">£{estimatedNet.toFixed(2)}</h2>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t.rolling28}</span>
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${rollingMonthHours > 90 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}>
-                                    {rollingMonthHours.toFixed(1)}h / 100h {t.maxHours}
-                                </span>
-                            </div>
-                            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                                <div className={`h-2.5 rounded-full ${rollingMonthHours > 90 ? 'bg-amber-500' : 'bg-red-600'}`} style={{ width: `${Math.min((rollingMonthHours / 100) * 100, 100)}%` }}></div>
-                            </div>
-                        </div>
-
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t.rolling365}</span>
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${rollingYearHours > 800 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}>
-                                    {rollingYearHours.toFixed(1)}h / 900h {t.maxHours}
-                                </span>
-                            </div>
-                            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                                <div className={`h-2.5 rounded-full ${rollingYearHours > 800 ? 'bg-amber-500' : 'bg-red-600'}`} style={{ width: `${Math.min((rollingYearHours / 900) * 100, 100)}%` }}></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8 space-y-4">
-                        <div>
-                            <h3 className="text-lg font-semibold text-slate-800 mb-1">{t.addRosterTitle} {currentUser} (.txt)</h3>
-                            <p className="text-xs text-slate-500 mb-3">{t.dragDropText}</p>
-                            
-                            <div 
-                                onDragOver={handleDragOver}
-                                onDragLeave={handleDragLeave}
-                                onDrop={handleDrop}
-                                className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${isDragging ? 'border-red-600 bg-red-50/50' : 'border-slate-300 bg-slate-50/30 hover:bg-slate-50'}`}
-                            >
-                                <div className="text-3xl mb-2">📄</div>
-                                <p className="text-xs font-semibold text-slate-700 mb-2">{t.dragDropText}</p>
-                                <span className="text-[10px] text-slate-400 block mb-4">{t.orChoose}</span>
-                                <label className="inline-block bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-5 rounded-xl text-sm cursor-pointer transition-colors shadow-sm">
-                                    {t.selectFile}
-                                    <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
-                                </label>
-                            </div>
-                        </div>
-
-                        {uploadedFiles.length > 0 && (
-                            <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50">
-                                <button 
-                                    onClick={() => setIsFilesOpen(!isFilesOpen)}
-                                    className="w-full p-3.5 flex justify-between items-center text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
-                                >
-                                    <span>📁 {t.uploadedHistory} ({uploadedFiles.length})</span>
-                                    <span>{isFilesOpen ? t.hide : t.viewFiles}</span>
-                                </button>
-                                {isFilesOpen && (
-                                    <div className="p-3 space-y-2">
-                                        {uploadedFiles.map(file => (
-                                            <div key={file.id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
-                                                <div>
-                                                    <span className="text-xs font-bold text-slate-800 block">📄 {file.name}</span>
-                                                    <span className="text-[10px] text-slate-400">{file.dateUploaded}</span>
-                                                </div>
-                                                <button 
-                                                    onClick={() => handleDeleteFile(file.id, file.name)}
-                                                    className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
-                                                >
-                                                    {t.deleteRoster}
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                                <h3 className="text-lg font-semibold text-slate-800">{t.tripsInPeriod} ({filteredTrips.length})</h3>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-sm">
-                                    <thead>
-                                        <tr className="bg-slate-50 text-slate-400 font-medium border-b border-slate-100">
-                                            <th className="p-4">Fecha / Date</th>
-                                            <th className="p-4">Patrón / Duty</th>
-                                            <th className="p-4">Tipo / Detail</th>
-                                            <th className="p-4">Opciones</th>
-                                            <th className="p-4 text-right">Acción</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {filteredTrips.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="5" className="p-6 text-center text-slate-400">
-                                                    {t.noRoster}
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            filteredTrips.map(f => (
-                                                <tr key={f.id} className="hover:bg-slate-50/50">
-                                                    <td className="p-4 text-slate-600 font-medium">{f.dateStr}</td>
-                                                    <td className="p-4 font-semibold text-slate-800">
-                                                        {f.type === 'sby' && f.calledOut ? `Flight ${f.callType.toUpperCase()} (Call-out)` : f.duty}
-                                                    </td>
-                                                    <td className="p-4 text-slate-600 text-xs">
-                                                        {f.holiday ? (
-                                                            <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-medium">{t.holidayBlock} {f.count} {t.days} (£{(f.count * holidayRatePerDay).toFixed(2)})</span>
-                                                        ) : f.type === 'sby' ? (
-                                                            <div className="space-y-1">
-                                                                <span className={`px-2 py-0.5 rounded font-semibold inline-block ${f.calledOut ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                                                                    {f.calledOut ? `${t.activated} ${f.callType.toUpperCase()}` : `${t.standby} (${f.count || 1})`}
-                                                                </span>
-                                                                {f.calledOut && (
-                                                                    <div className="flex gap-1 pt-1">
-                                                                        <button onClick={() => setSbyCallType(f.id, 'singapore')} className={`text-[10px] px-1.5 py-0.5 rounded ${f.callType === 'singapore' ? 'bg-red-600 text-white font-bold' : 'bg-slate-200 text-slate-700'}`}>SIN</button>
-                                                                        <button onClick={() => setSbyCallType(f.id, 'perth')} className={`text-[10px] px-1.5 py-0.5 rounded ${f.callType === 'perth' ? 'bg-red-600 text-white font-bold' : 'bg-slate-200 text-slate-700'}`}>PER</button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded uppercase font-medium">{f.type}</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-4 text-xs">
-                                                        {f.type === 'sby' ? (
-                                                            <label className="flex items-center space-x-2 cursor-pointer text-emerald-600 font-bold">
-                                                                <input type="checkbox" checked={f.calledOut} onChange={() => toggleCallOut(f.id)} className="rounded text-emerald-600" />
-                                                                <span>{t.callOutCheck}</span>
-                                                            </label>
-                                                        ) : !f.holiday ? (
-                                                            <div className="space-y-1.5">
-                                                                <label className="flex items-center space-x-2 cursor-pointer text-red-600 font-semibold">
-                                                                    <input 
-                                                                        type="checkbox" 
-                                                                        checked={f.delay16h || false} 
-                                                                        onChange={() => toggleDelay(f.id)} 
-                                                                        className="rounded text-red-600" 
-                                                                    />
-                                                                    <span>{t.apply16hCheck}</span>
-                                                                </label>
-                                                                {f.delay16h && f.type === 'singapore' && (
-                                                                    <select 
-                                                                        value={f.delaySectorsCount || 1} 
-                                                                        onChange={(e) => setDelaySectors(f.id, e.target.value)}
-                                                                        className="bg-red-50 border border-red-200 text-red-800 font-bold text-[11px] py-1 px-2 rounded-lg outline-none w-full"
-                                                                    >
-                                                                        <option value="1">{t.oneSectorOpt}</option>
-                                                                        <option value="2">{t.twoSectorsOpt}</option>
-                                                                    </select>
-                                                                )}
-                                                            </div>
-                                                        ) : null}
-                                                    </td>
-                                                    <td className="p-4 text-right">
-                                                        <button onClick={() => handleDeleteTrip(f.id)} className="text-red-500 hover:text-red-700 font-medium text-xs">{t.delete}</button>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold text-slate-800 mb-4">{t.deductionsBreakdown}</h3>
-                                <ul className="space-y-3 text-sm text-slate-600">
-                                    <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <span>{t.tax}</span>
-                                        <span className="font-semibold text-slate-800">£{estimatedTax.toFixed(2)}</span>
-                                    </li>
-                                    <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <div>
-                                            <span className="block font-medium">{t.ni}</span>
-                                            <span className="text-[10px] text-slate-400">{t.niSub}</span>
-                                        </div>
-                                        <span className="font-semibold text-slate-800">£{estimatedNI.toFixed(2)}</span>
-                                    </li>
-                                    <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <div>
-                                            <span className="block font-medium">{t.pension}</span>
-                                            <span className="text-[10px] text-slate-400">{t.pensionSub}</span>
-                                        </div>
-                                        <span className="font-semibold text-slate-800">£{estimatedPension.toFixed(2)}</span>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div className="mt-6 pt-4 border-t border-slate-200 bg-slate-50 p-4 rounded-xl">
-                                <div className="flex justify-between items-center text-sm font-bold text-slate-900">
-                                    <span>{t.totalDeductions}</span>
-                                    <span className="text-red-600">-£{totalDeductions.toFixed(2)}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-    </script>
-</body>
-</html>
+                const updated = allTrips.map(t => t.id === id ? {...t, delaySectorsCount: parseInt(count, 10
