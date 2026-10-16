@@ -63,7 +63,9 @@
                 registerTitle: "Crear Cuenta (Sign Up)",
                 forgotTitle: "Recuperar Contraseña",
                 emailLabel: "Email o Usuario:",
+                emailPlaceholder: "Usuario o correo electrónico",
                 nameLabel: "Nombre de Usuario:",
+                namePlaceholder: "Nombre de usuario",
                 passwordLabel: "Contraseña / PIN:",
                 loginBtn: "Entrar a la App",
                 registerBtn: "Registrarse",
@@ -124,7 +126,9 @@
                 registerTitle: "Create Account (Sign Up)",
                 forgotTitle: "Recover Password",
                 emailLabel: "Email or Username:",
+                emailPlaceholder: "Username or email address",
                 nameLabel: "Username:",
+                namePlaceholder: "Username",
                 passwordLabel: "Password / PIN:",
                 loginBtn: "Log In to App",
                 registerBtn: "Register",
@@ -469,7 +473,7 @@
                                 <form onSubmit={handleLogin} className="space-y-4">
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
-                                        <input type="text" placeholder="Jluisana o correo" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                        <input type="text" placeholder={t.emailPlaceholder} value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.passwordLabel}</label>
@@ -487,7 +491,7 @@
                                 <form onSubmit={handleRegister} className="space-y-4">
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.nameLabel}</label>
-                                        <input type="text" placeholder="Ej: Jluisana" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                        <input type="text" placeholder={t.namePlaceholder} value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">Correo Electrónico:</label>
@@ -510,7 +514,7 @@
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
                                         <input 
                                             type="text" 
-                                            placeholder="Jluisana o tu.correo@email.com" 
+                                            placeholder={t.emailPlaceholder} 
                                             value={inputEmail} 
                                             onChange={(e) => setInputEmail(e.target.value)} 
                                             className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" 
@@ -1063,4 +1067,270 @@
                                 <div className="absolute top-full left-0 mt-2 w-full sm:w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-40 p-3 space-y-3 max-h-96 overflow-y-auto">
                                     {availableYears.sort((a, b) => b - a).map(year => (
                                         <div key={year} className="border-b border-slate-100 pb-2 last:border-0">
-                                            <button onClick={() => setExpandedYear(expandedYear === String(year) ? null : String(year))} className="w-full flex items-center justify-between text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate
+                                            <button onClick={() => setExpandedYear(expandedYear === String(year) ? null : String(year))} className="w-full flex items-center justify-between text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 p-2.5 rounded-lg transition-colors">
+                                                <span>{year}</span>
+                                                <span>{expandedYear === String(year) ? '▲' : '▼'}</span>
+                                            </button>
+                                            {expandedYear === String(year) && (
+                                                <div className="mt-1.5 pl-2 space-y-1">
+                                                    {t.months.map((monthName, idx) => {
+                                                        const mNum = String(idx + 1).padStart(2, '0');
+                                                        const status = getPeriodStatus(mNum, year);
+                                                        const periodKey = `${mNum}-${year}`;
+                                                        const isSelected = selectedPeriod === periodKey;
+                                                        return (
+                                                            <button key={periodKey} onClick={() => { setSelectedPeriod(periodKey); setIsMenuOpen(false); }} className={`w-full flex items-center justify-between p-2 rounded-xl text-xs font-medium transition-colors text-left ${isSelected ? 'bg-red-50 text-red-700 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}>
+                                                                <span>{monthName} {year}</span>
+                                                                <span className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                                                                    status === 'complete' ? 'bg-emerald-500 ring-2 ring-emerald-100' : 'bg-slate-300'
+                                                                }`}></span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <div className="pt-2 border-t border-slate-100">
+                                        <button onClick={() => { setSelectedPeriod('all'); setIsMenuOpen(false); }} className="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-medium hover:bg-slate-50 text-red-600 font-semibold">
+                                            <span>🔍 {t.viewAll}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {allTrips.length > 0 && (
+                            <button onClick={handleClearHistory} className="text-red-500 hover:text-red-700 text-xs font-medium underline">
+                                {t.clearHistory} ({allTrips.length})
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.baseFixed}</span>
+                            <h2 className="text-2xl font-bold text-slate-900 mt-1">£{(basePay + fixedAllowance).toFixed(2)}</h2>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.sectorsAllowances}</span>
+                            <h2 className="text-2xl font-bold text-red-600 mt-1">£{(calculatedSectorPay + calculatedAllowances + calculatedHolidayPay).toFixed(2)}</h2>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.estGross}</span>
+                            <h2 className="text-2xl font-bold text-slate-800 mt-1">£{estimatedGross.toFixed(2)}</h2>
+                        </div>
+                        <div className="bg-red-600 text-white p-5 rounded-2xl shadow-md transition-all">
+                            <span className="text-xs font-bold uppercase tracking-wider text-red-100">{t.estNet}</span>
+                            <h2 className="text-2xl font-black text-white mt-1">£{estimatedNet.toFixed(2)}</h2>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t.rolling28}</span>
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${rollingMonthHours > 90 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}>
+                                    {rollingMonthHours.toFixed(1)}h / 100h {t.maxHours}
+                                </span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                <div className={`h-2.5 rounded-full ${rollingMonthHours > 90 ? 'bg-amber-500' : 'bg-red-600'}`} style={{ width: `${Math.min((rollingMonthHours / 100) * 100, 100)}%` }}></div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t.rolling365}</span>
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${rollingYearHours > 800 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}>
+                                    {rollingYearHours.toFixed(1)}h / 900h {t.maxHours}
+                                </span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                <div className={`h-2.5 rounded-full ${rollingYearHours > 800 ? 'bg-amber-500' : 'bg-red-600'}`} style={{ width: `${Math.min((rollingYearHours / 900) * 100, 100)}%` }}></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8 space-y-4">
+                        <div>
+                            <h3 className="text-lg font-semibold text-slate-800 mb-1">{t.addRosterTitle} {currentUser} (.txt)</h3>
+                            <p className="text-xs text-slate-500 mb-3">{t.dragDropText}</p>
+                            
+                            <div 
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
+                                className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${isDragging ? 'border-red-600 bg-red-50/50' : 'border-slate-300 bg-slate-50/30 hover:bg-slate-50'}`}
+                            >
+                                <div className="text-3xl mb-2">📄</div>
+                                <p className="text-xs font-semibold text-slate-700 mb-2">{t.dragDropText}</p>
+                                <span className="text-[10px] text-slate-400 block mb-4">{t.orChoose}</span>
+                                <label className="inline-block bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-5 rounded-xl text-sm cursor-pointer transition-colors shadow-sm">
+                                    {t.selectFile}
+                                    <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
+                                </label>
+                            </div>
+                        </div>
+
+                        {uploadedFiles.length > 0 && (
+                            <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50">
+                                <button 
+                                    onClick={() => setIsFilesOpen(!isFilesOpen)}
+                                    className="w-full p-3.5 flex justify-between items-center text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+                                >
+                                    <span>📁 {t.uploadedHistory} ({uploadedFiles.length})</span>
+                                    <span>{isFilesOpen ? t.hide : t.viewFiles}</span>
+                                </button>
+                                {isFilesOpen && (
+                                    <div className="p-3 space-y-2">
+                                        {uploadedFiles.map(file => (
+                                            <div key={file.id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
+                                                <div>
+                                                    <span className="text-xs font-bold text-slate-800 block">📄 {file.name}</span>
+                                                    <span className="text-[10px] text-slate-400">{file.dateUploaded}</span>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleDeleteFile(file.id, file.name)}
+                                                    className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                                                >
+                                                    {t.deleteRoster}
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                                <h3 className="text-lg font-semibold text-slate-800">{t.tripsInPeriod} ({filteredTrips.length})</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse text-sm">
+                                    <thead>
+                                        <tr className="bg-slate-50 text-slate-400 font-medium border-b border-slate-100">
+                                            <th className="p-4">Fecha / Date</th>
+                                            <th className="p-4">Patrón / Duty</th>
+                                            <th className="p-4">Tipo / Detail</th>
+                                            <th className="p-4">Opciones</th>
+                                            <th className="p-4 text-right">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {filteredTrips.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="5" className="p-6 text-center text-slate-400">
+                                                    {t.noRoster}
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            filteredTrips.map(f => (
+                                                <tr key={f.id} className="hover:bg-slate-50/50">
+                                                    <td className="p-4 text-slate-600 font-medium">{f.dateStr}</td>
+                                                    <td className="p-4 font-semibold text-slate-800">
+                                                        {f.type === 'sby' && f.calledOut ? `Flight ${f.callType.toUpperCase()} (Call-out)` : f.duty}
+                                                    </td>
+                                                    <td className="p-4 text-slate-600 text-xs">
+                                                        {f.holiday ? (
+                                                            <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-medium">{t.holidayBlock} {f.count} {t.days} (£{(f.count * holidayRatePerDay).toFixed(2)})</span>
+                                                        ) : f.type === 'sby' ? (
+                                                            <div className="space-y-1">
+                                                                <span className={`px-2 py-0.5 rounded font-semibold inline-block ${f.calledOut ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                                    {f.calledOut ? `${t.activated} ${f.callType.toUpperCase()}` : `${t.standby} (${f.count || 1})`}
+                                                                </span>
+                                                                {f.calledOut && (
+                                                                    <div className="flex gap-1 pt-1">
+                                                                        <button onClick={() => setSbyCallType(f.id, 'singapore')} className={`text-[10px] px-1.5 py-0.5 rounded ${f.callType === 'singapore' ? 'bg-red-600 text-white font-bold' : 'bg-slate-200 text-slate-700'}`}>SIN</button>
+                                                                        <button onClick={() => setSbyCallType(f.id, 'perth')} className={`text-[10px] px-1.5 py-0.5 rounded ${f.callType === 'perth' ? 'bg-red-600 text-white font-bold' : 'bg-slate-200 text-slate-700'}`}>PER</button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded uppercase font-medium">{f.type}</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-4 text-xs">
+                                                        {f.type === 'sby' ? (
+                                                            <label className="flex items-center space-x-2 cursor-pointer text-emerald-600 font-bold">
+                                                                <input type="checkbox" checked={f.calledOut} onChange={() => toggleCallOut(f.id)} className="rounded text-emerald-600" />
+                                                                <span>{t.callOutCheck}</span>
+                                                            </label>
+                                                        ) : !f.holiday ? (
+                                                            <div className="space-y-1.5">
+                                                                <label className="flex items-center space-x-2 cursor-pointer text-red-600 font-semibold">
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        checked={f.delay16h || false} 
+                                                                        onChange={() => toggleDelay(f.id)} 
+                                                                        className="rounded text-red-600" 
+                                                                    />
+                                                                    <span>{t.apply16hCheck}</span>
+                                                                </label>
+                                                                {f.delay16h && f.type === 'singapore' && (
+                                                                    <select 
+                                                                        value={f.delaySectorsCount || 1} 
+                                                                        onChange={(e) => setDelaySectors(f.id, e.target.value)}
+                                                                        className="bg-red-50 border border-red-200 text-red-800 font-bold text-[11px] py-1 px-2 rounded-lg outline-none w-full"
+                                                                    >
+                                                                        <option value="1">{t.oneSectorOpt}</option>
+                                                                        <option value="2">{t.twoSectorsOpt}</option>
+                                                                    </select>
+                                                                )}
+                                                            </div>
+                                                        ) : null}
+                                                    </td>
+                                                    <td className="p-4 text-right">
+                                                        <button onClick={() => handleDeleteTrip(f.id)} className="text-red-500 hover:text-red-700 font-medium text-xs">{t.delete}</button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-800 mb-4">{t.deductionsBreakdown}</h3>
+                                <ul className="space-y-3 text-sm text-slate-600">
+                                    <li className="flex justify-between pb-2 border-b border-slate-100">
+                                        <span>{t.tax}</span>
+                                        <span className="font-semibold text-slate-800">£{estimatedTax.toFixed(2)}</span>
+                                    </li>
+                                    <li className="flex justify-between pb-2 border-b border-slate-100">
+                                        <div>
+                                            <span className="block font-medium">{t.ni}</span>
+                                            <span className="text-[10px] text-slate-400">{t.niSub}</span>
+                                        </div>
+                                        <span className="font-semibold text-slate-800">£{estimatedNI.toFixed(2)}</span>
+                                    </li>
+                                    <li className="flex justify-between pb-2 border-b border-slate-100">
+                                        <div>
+                                            <span className="block font-medium">{t.pension}</span>
+                                            <span className="text-[10px] text-slate-400">{t.pensionSub}</span>
+                                        </div>
+                                        <span className="font-semibold text-slate-800">£{estimatedPension.toFixed(2)}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div className="mt-6 pt-4 border-t border-slate-200 bg-slate-50 p-4 rounded-xl">
+                                <div className="flex justify-between items-center text-sm font-bold text-slate-900">
+                                    <span>{t.totalDeductions}</span>
+                                    <span className="text-red-600">-£{totalDeductions.toFixed(2)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
