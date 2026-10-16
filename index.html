@@ -203,14 +203,12 @@
             const [inputPassword, setInputPassword] = React.useState('');
             const [maskedEmail, setMaskedEmail] = React.useState('');
 
-            const [rosterText, setRosterText] = React.useState('');
             const [isMenuOpen, setIsMenuOpen] = React.useState(false);
             const [isFilesOpen, setIsFilesOpen] = React.useState(false);
             const [expandedYear, setExpandedYear] = React.useState('2026');
             const [isDragging, setIsDragging] = React.useState(false);
             
             const [pendingFileContent, setPendingFileContent] = React.useState(null);
-            const [pendingFileName, setPendingFileName] = React.useState('');
             const [selectedModalYear, setSelectedModalYear] = React.useState('2026');
             
             const [allTrips, setAllTrips] = React.useState([]);
@@ -629,7 +627,6 @@
             const confirmAndProcessRoster = (targetYear) => {
                 const text = pendingFileContent;
                 setPendingFileContent(null);
-                setPendingFileName('');
                 if (!text || !text.trim()) return;
 
                 const lines = text.split(/\r?\n/);
@@ -674,7 +671,7 @@
                 const newProcessedTrips = [];
                 let currentHolidayBlock = null;
                 let currentSbyBlock = null;
-                const fileToken = `${generatedFileName}_${Date.now()}`;
+                const fileToken = `roster_${Date.now()}`;
 
                 rawDutyList.forEach(item => {
                     const isSby = item.duty === 'SBY' || item.duty === 'SR';
@@ -788,9 +785,7 @@
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (event) => {
-                    setRosterText(event.target.result);
                     setPendingFileContent(event.target.result);
-                    setPendingFileName(file.name);
                 };
                 reader.readAsText(file);
             };
@@ -1253,92 +1248,4 @@
                                                                 {f.calledOut && (
                                                                     <div className="flex gap-1 pt-1">
                                                                         <button onClick={() => setSbyCallType(f.id, 'singapore')} className={`text-[10px] px-1.5 py-0.5 rounded ${f.callType === 'singapore' ? 'bg-red-600 text-white font-bold' : 'bg-slate-200 text-slate-700'}`}>SIN</button>
-                                                                        <button onClick={() => setSbyCallType(f.id, 'perth')} className={`text-[10px] px-1.5 py-0.5 rounded ${f.callType === 'perth' ? 'bg-red-600 text-white font-bold' : 'bg-slate-200 text-slate-700'}`}>PER</button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded uppercase font-medium">{f.type}</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-4 text-xs">
-                                                        {f.type === 'sby' ? (
-                                                            <label className="flex items-center space-x-2 cursor-pointer text-emerald-600 font-bold">
-                                                                <input type="checkbox" checked={f.calledOut} onChange={() => toggleCallOut(f.id)} className="rounded text-emerald-600" />
-                                                                <span>{t.callOutCheck}</span>
-                                                            </label>
-                                                        ) : !f.holiday ? (
-                                                            <div className="space-y-1.5">
-                                                                <label className="flex items-center space-x-2 cursor-pointer text-red-600 font-semibold">
-                                                                    <input 
-                                                                        type="checkbox" 
-                                                                        checked={f.delay16h || false} 
-                                                                        onChange={() => toggleDelay(f.id)} 
-                                                                        className="rounded text-red-600" 
-                                                                    />
-                                                                    <span>{t.apply16hCheck}</span>
-                                                                </label>
-                                                                {f.delay16h && f.type === 'singapore' && (
-                                                                    <select 
-                                                                        value={f.delaySectorsCount || 1} 
-                                                                        onChange={(e) => setDelaySectors(f.id, e.target.value)}
-                                                                        className="bg-red-50 border border-red-200 text-red-800 font-bold text-[11px] py-1 px-2 rounded-lg outline-none w-full"
-                                                                    >
-                                                                        <option value="1">{t.oneSectorOpt}</option>
-                                                                        <option value="2">{t.twoSectorsOpt}</option>
-                                                                    </select>
-                                                                )}
-                                                            </div>
-                                                        ) : null}
-                                                    </td>
-                                                    <td className="p-4 text-right">
-                                                        <button onClick={() => handleDeleteTrip(f.id)} className="text-red-500 hover:text-red-700 font-medium text-xs">{t.delete}</button>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold text-slate-800 mb-4">{t.deductionsBreakdown}</h3>
-                                <ul className="space-y-3 text-sm text-slate-600">
-                                    <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <span>{t.tax}</span>
-                                        <span className="font-semibold text-slate-800">£{estimatedTax.toFixed(2)}</span>
-                                    </li>
-                                    <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <div>
-                                            <span className="block font-medium">{t.ni}</span>
-                                            <span className="text-[10px] text-slate-400">{t.niSub}</span>
-                                        </div>
-                                        <span className="font-semibold text-slate-800">£{estimatedNI.toFixed(2)}</span>
-                                    </li>
-                                    <li className="flex justify-between pb-2 border-b border-slate-100">
-                                        <div>
-                                            <span className="block font-medium">{t.pension}</span>
-                                            <span className="text-[10px] text-slate-400">{t.pensionSub}</span>
-                                        </div>
-                                        <span className="font-semibold text-slate-800">£{estimatedPension.toFixed(2)}</span>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div className="mt-6 pt-4 border-t border-slate-200 bg-slate-50 p-4 rounded-xl">
-                                <div className="flex justify-between items-center text-sm font-bold text-slate-900">
-                                    <span>{t.totalDeductions}</span>
-                                    <span className="text-red-600">-£{totalDeductions.toFixed(2)}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        ReactDOM.createRoot(getElementById('root')).render(<App />); // corregido en el código real de abajo a document.getElementById
-    </script>
-</body>
-</html>
+                                                                        <button
