@@ -31,6 +31,8 @@
             getDoc, 
             setDoc, 
             collection,
+            query,
+            where,
             getDocs,
             onSnapshot 
         } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
@@ -51,7 +53,7 @@
         window.firebaseAppInstances = { 
             auth, db, signInWithEmailAndPassword, createUserWithEmailAndPassword, 
             sendPasswordResetEmail, signOut, onAuthStateChanged, doc, getDoc, setDoc, 
-            collection, getDocs, onSnapshot, updateProfile 
+            collection, query, where, getDocs, onSnapshot, updateProfile 
         };
     </script>
 
@@ -62,12 +64,13 @@
                 loginTitle: "Iniciar Sesión",
                 registerTitle: "Crear Cuenta (Sign Up)",
                 forgotTitle: "Recuperar Contraseña",
-                emailLabel: "Correo Electrónico:",
-                nameLabel: "Nombre de Usuario o Correo:",
+                emailLabel: "Email o Usuario:",
+                nameLabel: "Nombre de Usuario:",
                 passwordLabel: "Contraseña / PIN:",
                 loginBtn: "Entrar a la App",
                 registerBtn: "Registrarse",
                 recoverBtn: "Enviar enlace de recuperación",
+                sendingBtn: "Procesando...",
                 forgotPasswordLink: "¿Olvidaste tu contraseña?",
                 backToLogin: "← Volver al inicio de sesión",
                 switchToRegister: "¿No tienes cuenta? Regístrate aquí",
@@ -104,7 +107,7 @@
                 delete: "Eliminar",
                 deductionsBreakdown: "Desglose de Deducciones",
                 tax: "Impuestos (Tax Code 1329L)",
-                ni: "Social Security (NI Cat A)",
+                ni: "Seguridad Social (NI Cat A)",
                 niSub: "8% sobre lo que supere £1,048/mes",
                 pension: "Pensión (People's Pension)",
                 pensionSub: "5% Salary Sacrifice (variable)",
@@ -120,12 +123,13 @@
                 loginTitle: "Log In",
                 registerTitle: "Create Account (Sign Up)",
                 forgotTitle: "Recover Password",
-                emailLabel: "Email Address:",
-                nameLabel: "Username or Email:",
+                emailLabel: "Email or Username:",
+                nameLabel: "Username:",
                 passwordLabel: "Password / PIN:",
                 loginBtn: "Log In to App",
                 registerBtn: "Register",
                 recoverBtn: "Send recovery link",
+                sendingBtn: "Processing...",
                 forgotPasswordLink: "Forgot your password?",
                 backToLogin: "← Back to log in",
                 switchToRegister: "Don't have an account? Register here",
@@ -182,6 +186,7 @@
             const [currentUser, setCurrentUser] = React.useState(null);
             const [currentEmail, setCurrentEmail] = React.useState('');
             const [authLoading, setAuthLoading] = React.useState(true);
+            const [isActionLoading, setIsActionLoading] = React.useState(false);
 
             const [viewMode, setViewMode] = React.useState('login'); 
             const [inputName, setInputName] = React.useState('');
@@ -267,22 +272,19 @@
             const handleLogin = async (e) => {
                 e.preventDefault();
                 if (!window.firebaseAppInstances) return;
-                const { auth, signInWithEmailAndPassword, db, collection, getDocs } = window.firebaseAppInstances;
+                setIsActionLoading(true);
+                const { auth, signInWithEmailAndPassword, db, collection, query, where, getDocs } = window.firebaseAppInstances;
                 
                 let targetEmail = inputEmail.trim();
 
                 if (!targetEmail.includes('@')) {
                     try {
-                        const querySnapshot = await getDocs(collection(db, "users"));
-                        let found = false;
-                        querySnapshot.forEach((docSnap) => {
-                            const data = docSnap.data();
-                            if (data.name && data.name.toLowerCase() === targetEmail.toLowerCase()) {
-                                targetEmail = data.email;
-                                found = true;
-                            }
-                        });
-                        if (!found) {
+                        const q = query(collection(db, "users"), where("name_lowercase", "==", targetEmail.toLowerCase()));
+                        const querySnapshot = await getDocs(q);
+                        if (!querySnapshot.empty) {
+                            targetEmail = querySnapshot.docs[0].data().email;
+                        } else {
+                            setIsActionLoading(false);
                             alert(lang === 'es' ? 'Nombre de usuario no encontrado.' : 'Username not found.');
                             return;
                         }
@@ -297,18 +299,22 @@
                     setInputPassword('');
                 } catch (error) {
                     alert(lang === 'es' ? 'Usuario/Correo o contraseña incorrectos.' : 'Incorrect Username/Email or Password.');
+                } finally {
+                    setIsActionLoading(false);
                 }
             };
 
             const handleRegister = async (e) => {
                 e.preventDefault();
                 if (!window.firebaseAppInstances) return;
+                setIsActionLoading(true);
                 const { auth, createUserWithEmailAndPassword, db, doc, setDoc, updateProfile } = window.firebaseAppInstances;
                 const name = inputName.trim();
                 const email = inputEmail.trim();
                 const password = inputPassword.trim();
 
                 if (!name || !email || !password) {
+                    setIsActionLoading(false);
                     alert(lang === 'es' ? 'Por favor, rellena todos los campos.' : 'Please fill in all fields.');
                     return;
                 }
@@ -330,16 +336,21 @@
                     setViewMode('login');
                 } catch (error) {
                     alert(lang === 'es' ? 'Error en el registro: ' + error.message : 'Registration error: ' + error.message);
+                } finally {
+                    setIsActionLoading(false);
                 }
             };
 
             const handleForgot = async (e) => {
                 e.preventDefault();
                 if (!window.firebaseAppInstances) return;
-                const { auth, sendPasswordResetEmail, db, collection, getDocs } = window.firebaseAppInstances;
-                const userInput = inputName.trim();
+                setIsActionLoading(true);
+
+                const { auth, sendPasswordResetEmail, db, collection, query, where, getDocs } = window.firebaseAppInstances;
+                const userInput = inputEmail.trim();
 
                 if (!userInput) {
+                    setIsActionLoading(false);
                     alert(lang === 'es' ? 'Por favor, introduce tu usuario o correo.' : 'Please enter your username or email.');
                     return;
                 }
@@ -348,18 +359,14 @@
                     let targetEmail = userInput;
 
                     if (!userInput.includes('@')) {
-                        const querySnapshot = await getDocs(collection(db, "users"));
-                        let found = false;
-                        querySnapshot.forEach((docSnap) => {
-                            const data = docSnap.data();
-                            if (data.name && data.name.toLowerCase() === userInput.toLowerCase()) {
-                                targetEmail = data.email;
-                                found = true;
-                            }
-                        });
-                        if (!found) {
-                            // Si no está en Firestore, probamos directamente por si acaso el input era el email sin arroba o similar
-                            targetEmail = userInput;
+                        const q = query(collection(db, "users"), where("name_lowercase", "==", userInput.toLowerCase()));
+                        const querySnapshot = await getDocs(q);
+                        if (!querySnapshot.empty) {
+                            targetEmail = querySnapshot.docs[0].data().email;
+                        } else {
+                            setIsActionLoading(false);
+                            alert(lang === 'es' ? 'No se encontró ningún usuario con ese nombre.' : 'No user found with that username.');
+                            return;
                         }
                     }
 
@@ -373,7 +380,9 @@
 
                     setViewMode('sent');
                 } catch (error) {
-                    alert(lang === 'es' ? 'No se encontró ningún usuario con ese nombre/correo.' : 'No user found with that name/email.');
+                    alert(lang === 'es' ? 'Error al enviar correo: ' + error.message : 'Error sending email: ' + error.message);
+                } finally {
+                    setIsActionLoading(false);
                 }
             };
 
@@ -386,7 +395,10 @@
             if (authLoading) {
                 return (
                     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                        <div className="text-slate-500 font-semibold text-sm">Cargando QrewSlip...</div>
+                        <div className="text-slate-500 font-semibold text-sm flex items-center gap-2">
+                            <span className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></span>
+                            Cargando QrewSlip...
+                        </div>
                     </div>
                 );
             }
@@ -425,15 +437,16 @@
                                 <form onSubmit={handleLogin} className="space-y-4">
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
-                                        <input type="text" placeholder="tu.correo@email.com o usuario" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                        <input type="text" placeholder="" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.passwordLabel}</label>
                                         <input type="password" placeholder="••••••••" value={inputPassword} onChange={(e) => setInputPassword(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
                                     </div>
 
-                                    <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2">
-                                        {t.loginBtn}
+                                    <button type="submit" disabled={isActionLoading} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2 flex items-center justify-center gap-2 disabled:opacity-50">
+                                        {isActionLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>}
+                                        {isActionLoading ? t.sendingBtn : t.loginBtn}
                                     </button>
                                 </form>
                             )}
@@ -443,18 +456,19 @@
                                 <form onSubmit={handleRegister} className="space-y-4">
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.nameLabel}</label>
-                                        <input type="text" placeholder="Ej: Jluisana" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                        <input type="text" placeholder="" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
-                                        <input type="email" placeholder="tu.correo@email.com" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
+                                        <input type="email" placeholder="" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.passwordLabel}</label>
                                         <input type="password" placeholder="••••••••" value={inputPassword} onChange={(e) => setInputPassword(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
                                     </div>
-                                    <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2">
-                                        {t.registerBtn}
+                                    <button type="submit" disabled={isActionLoading} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2 flex items-center justify-center gap-2 disabled:opacity-50">
+                                        {isActionLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>}
+                                        {isActionLoading ? t.sendingBtn : t.registerBtn}
                                     </button>
                                 </form>
                             )}
@@ -463,14 +477,15 @@
                             {viewMode === 'forgot' && (
                                 <form onSubmit={handleForgot} className="space-y-4">
                                     <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.nameLabel}</label>
-                                        <input type="text" placeholder="Introduce tu usuario o correo" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
+                                        <input type="text" placeholder="" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
                                     </div>
-                                    <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2">
-                                        {t.recoverBtn}
+                                    <button type="submit" disabled={isActionLoading} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2 flex items-center justify-center gap-2 disabled:opacity-50">
+                                        {isActionLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>}
+                                        {isActionLoading ? t.sendingBtn : t.recoverBtn}
                                     </button>
                                     <div className="text-center pt-2">
-                                        <button type="button" onClick={() => { setViewMode('login'); setInputName(''); }} className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors">
+                                        <button type="button" onClick={() => { setViewMode('login'); setInputEmail(''); }} className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors">
                                             {t.backToLogin}
                                         </button>
                                     </div>
@@ -485,7 +500,7 @@
                                         {lang === 'es' ? 'El enlace de recuperación se ha enviado a ' : 'The recovery link has been sent to '}
                                         <b className="text-slate-900">{maskedEmail}</b>
                                     </p>
-                                    <button onClick={() => { setViewMode('login'); setInputName(''); }} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-sm transition-colors mt-4">
+                                    <button onClick={() => { setViewMode('login'); setInputEmail(''); }} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-sm transition-colors mt-4">
                                         {t.backToLogin}
                                     </button>
                                 </div>
@@ -497,7 +512,7 @@
                                     <div>
                                         <button 
                                             type="button" 
-                                            onClick={() => { setViewMode('forgot'); setInputName(''); }} 
+                                            onClick={() => { setViewMode('forgot'); setInputEmail(''); }} 
                                             className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
                                         >
                                             {t.forgotPasswordLink}
@@ -1254,7 +1269,7 @@
                                             <span className="block font-medium">{t.ni}</span>
                                             <span className="text-[10px] text-slate-400">{t.niSub}</span>
                                         </div>
-                                        <span className="font-semibold text-slate-800">£{estimatedNI.label || `£${estimatedNI.toFixed(2)}`}</span>
+                                        <span className="font-semibold text-slate-800">£{estimatedNI.toFixed(2)}</span>
                                     </li>
                                     <li className="flex justify-between pb-2 border-b border-slate-100">
                                         <div>
