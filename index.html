@@ -20,11 +20,15 @@
                 subtitle: "Control Automático de Roster y Nómina",
                 loginTitle: "Iniciar Sesión",
                 registerTitle: "Crear Cuenta (Sign Up)",
+                forgotTitle: "Recuperar Contraseña",
                 emailLabel: "Correo Electrónico (para recuperación):",
                 nameLabel: "Nombre de Usuario:",
                 passwordLabel: "Contraseña / PIN:",
                 loginBtn: "Entrar a la App",
                 registerBtn: "Registrarse",
+                recoverBtn: "Enviar enlace de recuperación",
+                forgotPasswordLink: "¿Olvidaste tu contraseña?",
+                backToLogin: "← Volver al inicio de sesión",
                 switchToRegister: "¿No tienes cuenta? Regístrate aquí",
                 switchToLogin: "¿Ya tienes cuenta? Inicia sesión",
                 logout: "Cerrar Sesión",
@@ -74,11 +78,15 @@
                 subtitle: "Automatic Roster & Payroll Control",
                 loginTitle: "Log In",
                 registerTitle: "Create Account (Sign Up)",
+                forgotTitle: "Recover Password",
                 emailLabel: "Email (for recovery):",
                 nameLabel: "Username:",
                 passwordLabel: "Password / PIN:",
                 loginBtn: "Log In to App",
                 registerBtn: "Register",
+                recoverBtn: "Send recovery link",
+                forgotPasswordLink: "Forgot your password?",
+                backToLogin: "← Back to log in",
                 switchToRegister: "Don't have an account? Register here",
                 switchToLogin: "Already have an account? Log in",
                 logout: "Log Out",
@@ -141,10 +149,11 @@
                 return localStorage.getItem('qantas_current_session') || null;
             });
 
-            const [isRegisterMode, setIsRegisterMode] = React.useState(false);
+            const [viewMode, setViewMode] = React.useState('login'); // 'login', 'register', 'forgot', 'sent'
             const [inputName, setInputName] = React.useState('');
             const [inputEmail, setInputEmail] = React.useState('');
             const [inputPassword, setInputPassword] = React.useState('');
+            const [maskedEmail, setMaskedEmail] = React.useState('');
 
             const [rosterText, setRosterText] = React.useState('');
             const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -218,14 +227,39 @@
                 setInputName('');
                 setInputEmail('');
                 setInputPassword('');
-                setIsRegisterMode(false);
+                setViewMode('login');
+            };
+
+            const handleForgot = (e) => {
+                e.preventDefault();
+                const name = inputName.trim();
+                const userObj = usersData.find(u => u.name.toLowerCase() === name.toLowerCase());
+                
+                if (userObj) {
+                    const email = userObj.email;
+                    const parts = email.split('@');
+                    const usernamePart = parts[0];
+                    const domainPart = parts[1];
+                    
+                    let maskedUser = usernamePart;
+                    if (usernamePart.length > 2) {
+                        maskedUser = usernamePart.substring(0, 2) + '***';
+                    } else {
+                        maskedUser = '***';
+                    }
+                    
+                    setMaskedEmail(`${maskedUser}@${domainPart}`);
+                    setViewMode('sent');
+                } else {
+                    alert(lang === 'es' ? 'No se encontró ningún usuario con ese nombre.' : 'No user found with that name.');
+                }
             };
 
             const handleLogout = () => {
                 setCurrentUser(null);
             };
 
-            // SI NO HAY USUARIO LOGUEADO, MOSTRAMOS LA PANTALLA DE BIENVENIDA (LOG IN / SIGN IN)
+            // PANTALLA DE ACCESO (LOGIN / REGISTER / FORGOT)
             if (!currentUser) {
                 return (
                     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -243,7 +277,9 @@
 
                             <div className="text-center mb-6">
                                 <span className="text-[11px] font-black text-red-600 tracking-widest uppercase block">CABIN CREW PORTAL</span>
-                                <h2 className="text-xl font-bold text-slate-900 mt-1">{isRegisterMode ? t.registerTitle : t.loginTitle}</h2>
+                                <h2 className="text-xl font-bold text-slate-900 mt-1">
+                                    {viewMode === 'register' ? t.registerTitle : viewMode === 'forgot' ? t.forgotTitle : viewMode === 'sent' ? t.forgotTitle : t.loginTitle}
+                                </h2>
                             </div>
 
                             <div className="flex justify-center mb-6">
@@ -253,66 +289,100 @@
                                 </div>
                             </div>
 
-                            <form onSubmit={isRegisterMode ? handleRegister : handleLogin} className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-600 mb-1">{t.nameLabel}</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Ej: Julia" 
-                                        value={inputName} 
-                                        onChange={(e) => setInputName(e.target.value)} 
-                                        className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" 
-                                        required
-                                        autoFocus 
-                                    />
-                                </div>
+                            {/* VISTA 1: LOGIN */}
+                            {viewMode === 'login' && (
+                                <form onSubmit={handleLogin} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.nameLabel}</label>
+                                        <input type="text" placeholder="Ej: Julia" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.passwordLabel}</label>
+                                        <input type="password" placeholder="••••••••" value={inputPassword} onChange={(e) => setInputPassword(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
+                                    </div>
 
-                                {isRegisterMode && (
+                                    <div className="text-right pt-1">
+                                        <button type="button" onClick={() => { setViewMode('forgot'); setInputName(''); }} className="text-xs font-semibold text-slate-500 hover:text-red-600 transition-colors">
+                                            {t.forgotPasswordLink}
+                                        </button>
+                                    </div>
+
+                                    <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2">
+                                        {t.loginBtn}
+                                    </button>
+                                </form>
+                            )}
+
+                            {/* VISTA 2: REGISTER */}
+                            {viewMode === 'register' && (
+                                <form onSubmit={handleRegister} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.nameLabel}</label>
+                                        <input type="text" placeholder="Ej: Julia" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                    </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.emailLabel}</label>
-                                        <input 
-                                            type="email" 
-                                            placeholder="tucorreo@qantas.com" 
-                                            value={inputEmail} 
-                                            onChange={(e) => setInputEmail(e.target.value)} 
-                                            className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" 
-                                            required 
-                                        />
+                                        <input type="email" placeholder="tucorreo@qantas.com" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
                                     </div>
-                                )}
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.passwordLabel}</label>
+                                        <input type="password" placeholder="••••••••" value={inputPassword} onChange={(e) => setInputPassword(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required />
+                                    </div>
+                                    <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2">
+                                        {t.registerBtn}
+                                    </button>
+                                </form>
+                            )}
 
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-600 mb-1">{t.passwordLabel}</label>
-                                    <input 
-                                        type="password" 
-                                        maxLength="20"
-                                        placeholder="••••••••" 
-                                        value={inputPassword} 
-                                        onChange={(e) => setInputPassword(e.target.value)} 
-                                        className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" 
-                                        required 
-                                    />
+                            {/* VISTA 3: FORGOT PASSWORD */}
+                            {viewMode === 'forgot' && (
+                                <form onSubmit={handleForgot} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.nameLabel}</label>
+                                        <input type="text" placeholder="Introduce tu usuario" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" required autoFocus />
+                                    </div>
+                                    <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2">
+                                        {t.recoverBtn}
+                                    </button>
+                                    <div className="text-center pt-2">
+                                        <button type="button" onClick={() => { setViewMode('login'); setInputName(''); }} className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors">
+                                            {t.backToLogin}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {/* VISTA 4: SENT CONFIRMATION (ESTILO BANCO) */}
+                            {viewMode === 'sent' && (
+                                <div className="space-y-4 text-center py-2">
+                                    <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-xl font-bold">✓</div>
+                                    <p className="text-xs text-slate-600 leading-relaxed">
+                                        {lang === 'es' ? 'El enlace de recuperación se ha enviado a ' : 'The recovery link has been sent to '}
+                                        <b className="text-slate-900">{maskedEmail}</b>
+                                    </p>
+                                    <button onClick={() => { setViewMode('login'); setInputName(''); }} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-sm transition-colors mt-4">
+                                        {t.backToLogin}
+                                    </button>
                                 </div>
+                            )}
 
-                                <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md mt-2">
-                                    {isRegisterMode ? t.registerBtn : t.loginBtn}
-                                </button>
-                            </form>
-
-                            <div className="mt-6 text-center border-t border-slate-100 pt-4">
-                                <button 
-                                    onClick={() => { setIsRegisterMode(!isRegisterMode); setInputName(''); setInputEmail(''); setInputPassword(''); }} 
-                                    className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
-                                >
-                                    {isRegisterMode ? t.switchToLogin : t.switchToRegister}
-                                </button>
-                            </div>
+                            {/* ENLACES INFERIORES DE CAMBIO */}
+                            {viewMode !== 'forgot' && viewMode !== 'sent' && (
+                                <div className="mt-6 text-center border-t border-slate-100 pt-4">
+                                    <button 
+                                        onClick={() => { setViewMode(viewMode === 'register' ? 'login' : 'register'); setInputName(''); setInputEmail(''); setInputPassword(''); }} 
+                                        className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
+                                    >
+                                        {viewMode === 'register' ? t.switchToLogin : t.switchToRegister}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 );
             }
 
-            // A PARTIR DE AQUÍ SE MUESTRA EL HOME HABITUAL UNA VEZ LOGUEADO
+            // HOME HABITUAL (LOGUEADO)
             const basePay = 1916.58;
             const fixedAllowance = 80.27;
             const singaporeAllowancePerTrip = 421.32; 
