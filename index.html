@@ -30,6 +30,7 @@
             doc, 
             getDoc, 
             setDoc, 
+            deleteDoc,
             collection,
             getDocs,
             onSnapshot,
@@ -51,7 +52,7 @@
 
         window.firebaseAppInstances = { 
             auth, db, signInWithEmailAndPassword, createUserWithEmailAndPassword, 
-            sendPasswordResetEmail, signOut, onAuthStateChanged, doc, getDoc, setDoc, 
+            sendPasswordResetEmail, signOut, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc,
             collection, getDocs, onSnapshot, updateProfile, updateDoc 
         };
     </script>
@@ -427,6 +428,21 @@
                 }
             };
 
+            const handleDeleteUser = async (targetUid, targetName) => {
+                if (!confirm(`¿Estás segura de que deseas ELIMINAR permanentemente a "${targetName}"? Se borrarán sus datos y su historial de vuelos.`)) return;
+                if (!window.firebaseAppInstances) return;
+                const { db, doc, deleteDoc } = window.firebaseAppInstances;
+
+                try {
+                    await deleteDoc(doc(db, "users", targetUid));
+                    await deleteDoc(doc(db, "crew_data", targetUid));
+                    setUsersList(prev => prev.filter(u => u.id !== targetUid));
+                    alert(`El usuario ${targetName} ha sido eliminado correctamente.`);
+                } catch (err) {
+                    alert("Error al eliminar el usuario: " + err.message);
+                }
+            };
+
             const parseFileToTrips = (text, targetYear, fileToken) => {
                 const lines = text.split(/\r?\n/);
                 let rawDutyList = [];
@@ -726,7 +742,7 @@
                         name: name,
                         name_lowercase: name.toLowerCase(),
                         email: email,
-                        approved: isMainAdmin, // El main admin se aprueba automáticamente, otros requieren aprobación
+                        approved: isMainAdmin, 
                         isNewUser: true
                     });
 
@@ -1365,28 +1381,40 @@
 
                             <div className="divide-y divide-slate-100">
                                 {usersList.map(u => (
-                                    <div key={u.id} className="py-3.5 flex items-center justify-between">
+                                    <div key={u.id} className="py-3.5 flex items-center justify-between gap-2">
                                         <div>
                                             <span className="text-sm font-bold text-slate-800 block">{u.name || 'Sin nombre'}</span>
                                             <span className="text-xs text-slate-400">{u.email}</span>
                                         </div>
 
-                                        {ADMIN_EMAILS.includes((u.email || '').toLowerCase()) ? (
-                                            <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
-                                                Main Admin
-                                            </span>
-                                        ) : (
-                                            <button 
-                                                onClick={() => handleToggleUserApproval(u.id, u.approved)} 
-                                                className={`text-xs font-bold px-4 py-2 rounded-xl transition-colors ${
-                                                    u.approved 
-                                                        ? 'bg-emerald-50 text-emerald-700 hover:bg-red-50 hover:text-red-600' 
-                                                        : 'bg-amber-50 text-amber-700 hover:bg-emerald-50 hover:text-emerald-600'
-                                                }`}
-                                            >
-                                                {u.approved ? '✓ Aprobado (Bloquear)' : '⏳ Pendiente (Aprobar)'}
-                                            </button>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {ADMIN_EMAILS.includes((u.email || '').toLowerCase()) ? (
+                                                <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200">
+                                                    Main Admin
+                                                </span>
+                                            ) : (
+                                                <>
+                                                    <button 
+                                                        onClick={() => handleToggleUserApproval(u.id, u.approved)} 
+                                                        className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-colors ${
+                                                            u.approved 
+                                                                ? 'bg-emerald-50 text-emerald-700 hover:bg-amber-50 hover:text-amber-600' 
+                                                                : 'bg-amber-50 text-amber-700 hover:bg-emerald-50 hover:text-emerald-600'
+                                                        }`}
+                                                    >
+                                                        {u.approved ? '✓ Aprobado' : '⏳ Aprobar'}
+                                                    </button>
+                                                    
+                                                    <button 
+                                                        onClick={() => handleDeleteUser(u.id, u.name || u.email)} 
+                                                        className="text-xs font-bold px-3 py-1.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                                                        title="Eliminar usuario definitivamente"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
