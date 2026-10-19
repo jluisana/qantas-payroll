@@ -107,11 +107,11 @@
                 twoSectorsOpt: "Ambos Sectores (+£239.50)",
                 delete: "Eliminar",
                 deductionsBreakdown: "Desglose de Deducciones",
-                tax: "Impuestos (Tax Code 1329L)",
+                tax: "Impuestos",
                 ni: "Seguridad Social (NI Cat A)",
                 niSub: "8% sobre lo que supere £1,048/mes",
-                pension: "Pensión (People's Pension)",
-                pensionSub: "5% Salary Sacrifice (variable)",
+                pension: "Pensión (Salary Sacrifice)",
+                pensionSub: "Deducción sobre Base",
                 totalDeductions: "Total Deducciones:",
                 modalYearTitle: "Selecciona el Año del Roster",
                 modalYearSub: "Elige a qué año corresponde el archivo:",
@@ -121,11 +121,12 @@
                 userNotFound: "Usuario o correo no encontrado.",
                 profileBtn: "Mi Perfil",
                 profileTitle: "Configuración de Perfil",
-                profileSub: "Actualiza tu información personal y datos de tripulante",
+                profileSub: "Actualiza tu información personal y datos fiscales",
                 saveProfile: "Guardar Cambios",
                 profileSaved: "¡Perfil actualizado correctamente!",
                 basePayLabel: "Salario Base Mensual (£):",
-                fixedAllowanceLabel: "Dietas / Allowance Fijo (£):",
+                taxCodeLabel: "Tax Code (UK):",
+                pensionLabel: "Aportación a Pensión (%):",
                 backToDashboard: "← Volver al Panel",
                 months: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
                 monthsShort: ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
@@ -180,11 +181,11 @@
                 twoSectorsOpt: "Both Sectors (+£239.50)",
                 delete: "Delete",
                 deductionsBreakdown: "Deductions Breakdown",
-                tax: "Tax (Tax Code 1329L)",
+                tax: "Income Tax",
                 ni: "National Insurance (NI Cat A)",
                 niSub: "8% over £1,048/month",
-                pension: "Pension (People's Pension)",
-                pensionSub: "5% Salary Sacrifice (variable)",
+                pension: "Pension (Salary Sacrifice)",
+                pensionSub: "Deduction from Base",
                 totalDeductions: "Total Deductions:",
                 modalYearTitle: "Select Roster Year",
                 modalYearSub: "Choose the year for this file:",
@@ -194,14 +195,15 @@
                 userNotFound: "User or email not found.",
                 profileBtn: "My Profile",
                 profileTitle: "Profile Settings",
-                profileSub: "Update your personal information and crew settings",
+                profileSub: "Update your personal information and tax settings",
                 saveProfile: "Save Changes",
                 profileSaved: "Profile successfully updated!",
                 basePayLabel: "Monthly Base Pay (£):",
-                fixedAllowanceLabel: "Fixed Allowance (£):",
+                taxCodeLabel: "Tax Code (UK):",
+                pensionLabel: "Pension Contribution (%):",
                 backToDashboard: "← Back to Dashboard",
                 months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-                monthsShort: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dic"]
+                monthsShort: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
             }
         };
 
@@ -238,9 +240,12 @@
             const [uploadedFiles, setUploadedFiles] = React.useState([]);
             const [selectedPeriod, setSelectedPeriod] = React.useState('09-2026');
 
-            const [basePay, setBasePay] = React.useState(1916.58);
-            const [fixedAllowance, setFixedAllowance] = React.useState(80.27);
+            // Configuración salarial y fiscal por defecto
+            const [basePay, setBasePay] = React.useState(1916.44);
+            const [taxCode, setTaxCode] = React.useState('1329L');
+            const [pensionPercent, setPensionPercent] = React.useState(5);
 
+            const fixedAllowance = 80.27; // Allowance fijo constante
             const singaporeAllowancePerTrip = 421.32; 
             const perthAllowancePerTrip = 239.12;
             const holidayRatePerDay = 17.39; 
@@ -305,14 +310,15 @@
                         if (data.trips) setAllTrips(data.trips);
                         if (data.files) setUploadedFiles(data.files);
                         if (data.basePay !== undefined) setBasePay(data.basePay);
-                        if (data.fixedAllowance !== undefined) setFixedAllowance(data.fixedAllowance);
+                        if (data.taxCode !== undefined) setTaxCode(data.taxCode);
+                        if (data.pensionPercent !== undefined) setPensionPercent(data.pensionPercent);
                     }
                 });
 
                 return () => unsubscribe();
             }, [currentUid]);
 
-            const saveDataToCloud = async (newTrips, newFiles, customBase = basePay, customAllowance = fixedAllowance) => {
+            const saveDataToCloud = async (newTrips, newFiles, customBase = basePay, customTax = taxCode, customPension = pensionPercent) => {
                 if (!currentUid || !window.firebaseAppInstances) return;
                 const { db, doc, setDoc } = window.firebaseAppInstances;
                 try {
@@ -320,7 +326,9 @@
                         trips: newTrips,
                         files: newFiles,
                         basePay: customBase,
-                        fixedAllowance: customAllowance
+                        taxCode: customTax,
+                        pensionPercent: customPension,
+                        fixedAllowance: fixedAllowance
                     }, { merge: true });
                 } catch (e) {
                     console.error("Error guardando datos:", e);
@@ -344,7 +352,7 @@
                         email: profileEmail
                     }, { merge: true });
 
-                    await saveDataToCloud(allTrips, uploadedFiles, basePay, fixedAllowance);
+                    await saveDataToCloud(allTrips, uploadedFiles, basePay, taxCode, pensionPercent);
                     setCurrentUser(profileName);
                     alert(t.profileSaved);
                     setCurrentScreen('dashboard');
@@ -1014,7 +1022,23 @@
 
             const estimatedGross = basePay + fixedAllowance + calculatedSectorPay + calculatedAllowances + calculatedHolidayPay;
 
-            const taxFreeAllowanceMonthly = 1107.50; 
+            // Lógica Dinámica de Tax Code (UK)
+            let taxFreeAllowanceMonthly = 0;
+            const codeClean = (taxCode || '').toUpperCase().trim();
+            const numericPart = parseInt(codeClean.replace(/[^0-9]/g, ''), 10);
+
+            if (!isNaN(numericPart) && numericPart > 0) {
+                taxFreeAllowanceMonthly = (numericPart * 10) / 12;
+            } else if (codeClean === '1257L') {
+                taxFreeAllowanceMonthly = 1047.50;
+            } else if (codeClean === '1329L') {
+                taxFreeAllowanceMonthly = 1107.50;
+            } else if (codeClean === 'BR' || codeClean === '0T') {
+                taxFreeAllowanceMonthly = 0;
+            } else {
+                taxFreeAllowanceMonthly = 1107.50; // valor estándar si no reconoce
+            }
+
             const taxableAmount = Math.max(0, estimatedGross - taxFreeAllowanceMonthly);
             const estimatedTax = taxableAmount * 0.20;
 
@@ -1025,7 +1049,7 @@
                 estimatedNI = niSubjectAmount * 0.08;
             }
 
-            const estimatedPension = (basePay + fixedAllowance) * 0.05; 
+            const estimatedPension = basePay * (pensionPercent / 100); 
             const totalDeductions = estimatedTax + estimatedNI + estimatedPension;
             const estimatedNet = estimatedGross - totalDeductions;
 
@@ -1204,19 +1228,35 @@
                                         required 
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-600 mb-1">{t.fixedAllowanceLabel}</label>
-                                    <input 
-                                        type="number" 
-                                        step="0.01"
-                                        value={fixedAllowance} 
-                                        onChange={(e) => setFixedAllowance(parseFloat(e.target.value) || 0)} 
-                                        className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" 
-                                        required 
-                                    />
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.taxCodeLabel}</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="ej. 1329L"
+                                            value={taxCode} 
+                                            onChange={(e) => setTaxCode(e.target.value)} 
+                                            className="w-full border border-slate-300 rounded-xl p-3 text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600 uppercase" 
+                                            required 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.pensionLabel}</label>
+                                        <input 
+                                            type="number" 
+                                            step="0.5"
+                                            min="0"
+                                            max="100"
+                                            value={pensionPercent} 
+                                            onChange={(e) => setPensionPercent(parseFloat(e.target.value) || 0)} 
+                                            className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" 
+                                            required 
+                                        />
+                                    </div>
                                 </div>
 
-                                <div className="flex gap-3 pt-2">
+                                <div className="flex gap-3 pt-4">
                                     <button type="button" onClick={() => setCurrentScreen('dashboard')} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-sm transition-colors">
                                         {t.cancel}
                                     </button>
@@ -1492,7 +1532,10 @@
                                         <h3 className="text-lg font-semibold text-slate-800 mb-4">{t.deductionsBreakdown}</h3>
                                         <ul className="space-y-3 text-sm text-slate-600">
                                             <li className="flex justify-between pb-2 border-b border-slate-100">
-                                                <span>{t.tax}</span>
+                                                <div>
+                                                    <span className="block font-medium">{t.tax}</span>
+                                                    <span className="text-[10px] text-slate-400">Code: <b>{taxCode || '1329L'}</b></span>
+                                                </div>
                                                 <span className="font-semibold text-slate-800">£{estimatedTax.toFixed(2)}</span>
                                             </li>
                                             <li className="flex justify-between pb-2 border-b border-slate-100">
@@ -1505,7 +1548,7 @@
                                             <li className="flex justify-between pb-2 border-b border-slate-100">
                                                 <div>
                                                     <span className="block font-medium">{t.pension}</span>
-                                                    <span className="text-[10px] text-slate-400">{t.pensionSub}</span>
+                                                    <span className="text-[10px] text-slate-400">{pensionPercent}% sobre Salario Base</span>
                                                 </div>
                                                 <span className="font-semibold text-slate-800">£{estimatedPension.toFixed(2)}</span>
                                             </li>
