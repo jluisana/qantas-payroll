@@ -203,7 +203,7 @@
                 pensionLabel: "Pension Contribution (%):",
                 backToDashboard: "← Back to Dashboard",
                 months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-                monthsShort: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+                monthsShort: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dic"]
             }
         };
 
@@ -256,7 +256,10 @@
             };
 
             const getTripEndDate = (trip) => {
-                const startDate = new Date(trip.year, trip.month - 1, trip.day);
+                const y = parseInt(trip.year, 10);
+                const m = parseInt(trip.month, 10) - 1;
+                const d = parseInt(trip.day, 10);
+                const startDate = new Date(y, m, d);
                 const durationDays = getTripDuration(trip);
                 const endDate = new Date(startDate);
                 endDate.setDate(endDate.getDate() + (durationDays - 1));
@@ -456,9 +459,9 @@
 
                         const isOverlapping = (tripList) => tripList.some(t => {
                             if (t.holiday) return false;
-                            const tStart = new Date(t.year, t.month - 1, t.day).getTime();
+                            const tStart = new Date(parseInt(t.year, 10), parseInt(t.month, 10) - 1, parseInt(t.day, 10)).getTime();
                             const tEnd = getTripEndDate(t).getTime();
-                            const itemTime = new Date(item.year, item.month - 1, item.day).getTime();
+                            const itemTime = new Date(parseInt(item.year, 10), parseInt(item.month, 10) - 1, parseInt(item.day, 10)).getTime();
                             return itemTime >= tStart && itemTime <= tEnd;
                         });
 
@@ -959,29 +962,39 @@
                 return 0;
             };
 
-            // --- LÓGICA DE ROLLING DE 28 DÍAS Y 365 DÍAS DESDE HOY ---
-            const today = new Date();
-            today.setHours(23, 59, 59, 999);
+            // --- LÓGICA DE ROLLING 28 DÍAS Y 365 DÍAS CORREGIDA ---
+            const todayNow = new Date();
+            const todayTimestamp = new Date(todayNow.getFullYear(), todayNow.getMonth(), todayNow.getDate(), 23, 59, 59, 999).getTime();
 
-            const cutoff28Days = new Date(today);
-            cutoff28Days.setDate(cutoff28Days.getDate() - 28);
-            cutoff28Days.setHours(0, 0, 0, 0);
-
-            const cutoff365Days = new Date(today);
-            cutoff365Days.setFullYear(cutoff365Days.getFullYear() - 1);
-            cutoff365Days.setHours(0, 0, 0, 0);
+            const cutoff28Timestamp = new Date(todayNow.getFullYear(), todayNow.getMonth(), todayNow.getDate() - 28, 0, 0, 0, 0).getTime();
+            const cutoff365Timestamp = new Date(todayNow.getFullYear() - 1, todayNow.getMonth(), todayNow.getDate(), 0, 0, 0, 0).getTime();
 
             const rollingMonthHours = allTrips.reduce((acc, f) => {
-                const tripDate = new Date(f.year, f.month - 1, f.day);
-                if (tripDate >= cutoff28Days && tripDate <= today) {
+                const y = parseInt(f.year, 10);
+                const m = parseInt(f.month, 10) - 1;
+                const d = parseInt(f.day, 10);
+                
+                // Evaluamos si el viaje (desde el inicio hasta la fecha de fin) cae en los últimos 28 días
+                const tripStartDate = new Date(y, m, d, 0, 0, 0, 0).getTime();
+                const tripEndDate = getTripEndDate(f).getTime();
+
+                if ((tripStartDate >= cutoff28Timestamp && tripStartDate <= todayTimestamp) || 
+                    (tripEndDate >= cutoff28Timestamp && tripEndDate <= todayTimestamp)) {
                     return acc + getTripHours(f);
                 }
                 return acc;
             }, 0);
 
             const rollingYearHours = allTrips.reduce((acc, f) => {
-                const tripDate = new Date(f.year, f.month - 1, f.day);
-                if (tripDate >= cutoff365Days && tripDate <= today) {
+                const y = parseInt(f.year, 10);
+                const m = parseInt(f.month, 10) - 1;
+                const d = parseInt(f.day, 10);
+
+                const tripStartDate = new Date(y, m, d, 0, 0, 0, 0).getTime();
+                const tripEndDate = getTripEndDate(f).getTime();
+
+                if ((tripStartDate >= cutoff365Timestamp && tripStartDate <= todayTimestamp) ||
+                    (tripEndDate >= cutoff365Timestamp && tripEndDate <= todayTimestamp)) {
                     return acc + getTripHours(f);
                 }
                 return acc;
