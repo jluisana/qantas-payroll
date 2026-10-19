@@ -221,7 +221,7 @@
             const [inputPassword, setInputPassword] = React.useState('');
             const [maskedEmail, setMaskedEmail] = React.useState('');
 
-            const [currentScreen, setCurrentScreen] = React.useState('dashboard'); // 'dashboard' o 'profile'
+            const [currentScreen, setCurrentScreen] = React.useState('dashboard');
             const [profileName, setProfileName] = React.useState('');
             const [profileEmail, setProfileEmail] = React.useState('');
 
@@ -590,4 +590,181 @@
                 e.preventDefault();
                 if (!window.firebaseAppInstances) return;
                 setIsActionLoading(true);
-                const { auth, signInWithEmail
+                const { auth, signInWithEmailAndPassword, db, collection, getDocs } = window.firebaseAppInstances;
+                
+                let targetInput = inputEmail.trim();
+                let targetEmail = targetInput;
+
+                if (!targetInput.includes('@')) {
+                    try {
+                        const querySnapshot = await getDocs(collection(db, "users"));
+                        let foundEmail = null;
+                        querySnapshot.forEach((docSnap) => {
+                            const data = docSnap.data();
+                            if (data.name && data.name.toLowerCase() === targetInput.toLowerCase()) {
+                                foundEmail = data.email;
+                            }
+                        });
+                        if (foundEmail) {
+                            targetEmail = foundEmail;
+                        } else {
+                            setIsActionLoading(false);
+                            alert(t.userNotFound);
+                            return;
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                }
+
+                try {
+                    await signInWithEmailAndPassword(auth, targetEmail, inputPassword.trim());
+                    setInputEmail('');
+                    setInputPassword('');
+                } catch (error) {
+                    alert(lang === 'es' ? 'Usuario/Correo o contraseña incorrectos.' : 'Incorrect Username/Email or Password.');
+                } finally {
+                    setIsActionLoading(false);
+                }
+            };
+
+            const handleRegister = async (e) => {
+                e.preventDefault();
+                if (!window.firebaseAppInstances) return;
+                setIsActionLoading(true);
+                const { auth, createUserWithEmailAndPassword, db, doc, setDoc, updateProfile } = window.firebaseAppInstances;
+                const name = inputName.trim();
+                const email = inputEmail.trim().toLowerCase();
+                const password = inputPassword.trim();
+
+                if (!name || !email || !password) {
+                    setIsActionLoading(false);
+                    alert(lang === 'es' ? 'Por favor, rellena todos los campos.' : 'Please fill in all fields.');
+                    return;
+                }
+
+                try {
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    await updateProfile(userCredential.user, { displayName: name });
+                    
+                    await setDoc(doc(db, "users", userCredential.user.uid), {
+                        name: name,
+                        name_lowercase: name.toLowerCase(),
+                        email: email
+                    });
+
+                    setCurrentUser(name);
+                    setCurrentUid(userCredential.user.uid);
+                    setInputName('');
+                    setInputEmail('');
+                    setInputPassword('');
+                    setViewMode('login');
+                } catch (error) {
+                    alert(lang === 'es' ? 'Error en el registro: ' + error.message : 'Registration error: ' + error.message);
+                } finally {
+                    setIsActionLoading(false);
+                }
+            };
+
+            const handleForgot = async (e) => {
+                e.preventDefault();
+                if (!window.firebaseAppInstances) return;
+                setIsActionLoading(true);
+
+                const { auth, sendPasswordResetEmail, db, collection, getDocs } = window.firebaseAppInstances;
+                let targetInput = inputEmail.trim();
+                let targetEmail = targetInput;
+
+                if (!targetInput) {
+                    setIsActionLoading(false);
+                    alert(lang === 'es' ? 'Por favor, introduce tu correo electrónico.' : 'Please enter your email address.');
+                    return;
+                }
+
+                try {
+                    if (!targetInput.includes('@')) {
+                        const querySnapshot = await getDocs(collection(db, "users"));
+                        let foundEmail = null;
+                        querySnapshot.forEach((docSnap) => {
+                            const data = docSnap.data();
+                            if (data.name && data.name.toLowerCase() === targetInput.toLowerCase()) {
+                                foundEmail = data.email;
+                            }
+                        });
+                        if (foundEmail) {
+                            targetEmail = foundEmail;
+                        } else {
+                            setIsActionLoading(false);
+                            alert(t.emailNotFound);
+                            return;
+                        }
+                    } else {
+                        const querySnapshot = await getDocs(collection(db, "users"));
+                        let found = false;
+                        querySnapshot.forEach((docSnap) => {
+                            const data = docSnap.data();
+                            if (data.email && data.email.toLowerCase() === targetInput.toLowerCase()) {
+                                found = true;
+                            }
+                        });
+                        if (!found) {
+                            setIsActionLoading(false);
+                            alert(t.emailNotFound);
+                            return;
+                        }
+                    }
+
+                    await sendPasswordResetEmail(auth, targetEmail);
+
+                    const parts = targetEmail.split('@');
+                    const usernamePart = parts[0];
+                    const domainPart = parts[1] || 'email.com';
+                    let maskedUser = usernamePart.length > 2 ? usernamePart.substring(0, 2) + '***' : '***';
+                    setMaskedEmail(`${maskedUser}@${domainPart}`);
+
+                    setViewMode('sent');
+                } catch (error) {
+                    if (error.code === 'auth/user-not-found') {
+                        alert(t.emailNotFound);
+                    } else {
+                        alert(lang === 'es' ? 'Error al enviar correo: ' + error.message : 'Error sending email: ' + error.message);
+                    }
+                } finally {
+                    setIsActionLoading(false);
+                }
+            };
+
+            const handleLogout = async () => {
+                if (!window.firebaseAppInstances) return;
+                const { auth, signOut } = window.firebaseAppInstances;
+                await signOut(auth);
+            };
+
+            if (authLoading) {
+                return (
+                    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                        <div className="text-slate-500 font-semibold text-sm flex items-center gap-2">
+                            <span className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></span>
+                            Cargando QrewSlip...
+                        </div>
+                    </div>
+                );
+            }
+
+            if (!currentUser) {
+                return (
+                    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+                        <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border border-slate-100">
+                            
+                            <div className="flex justify-center mb-6">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-md transform -rotate-3">
+                                        Q
+                                    </div>
+                                    <span className="text-2xl font-black text-slate-900 tracking-tight">Qrew<span className="text-red-600">Slip</span></span>
+                                </div>
+                            </div>
+
+                            <div className="text-center mb-6">
+                                <span className="text-[11px] font-black text-red-600 tracking-widest uppercase block">CABIN CREW PORTAL</span>
+                                <h2 className="text-xl font
