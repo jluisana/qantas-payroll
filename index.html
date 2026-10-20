@@ -58,7 +58,7 @@
     </script>
 
     <script type="text/babel">
-        const ADMIN_EMAILS = ["julia.luisana@gmail.com"]; // Email principal de administración
+        const ADMIN_EMAILS = ["julia.luisana@gmail.com"];
 
         const translations = {
             es: {
@@ -133,6 +133,7 @@
                 taxCodeLabel: "Tax Code (UK):",
                 pensionLabel: "Aportación a Pensión (%):",
                 hasPensionLabel: "¿Pagas pensión?",
+                medicalBenefitsLabel: "Beneficios Médicos Imponibles (£):",
                 backToDashboard: "← Volver al Panel",
                 welcomeModalTitle: "¡Bienvenid@ a QrewSlip! ✈️",
                 welcomeModalSub: "Por favor, confirma tus datos fiscales iniciales para calcular tus deducciones correctamente:",
@@ -211,6 +212,7 @@
                 taxCodeLabel: "Tax Code (UK):",
                 pensionLabel: "Pension Contribution (%):",
                 hasPensionLabel: "Do you pay pension?",
+                medicalBenefitsLabel: "Taxable Medical Benefits (£):",
                 backToDashboard: "← Back to Dashboard",
                 welcomeModalTitle: "Welcome to QrewSlip! ✈️",
                 welcomeModalSub: "Please confirm your initial tax settings to calculate deductions correctly:",
@@ -253,16 +255,18 @@
             const [uploadedFiles, setUploadedFiles] = React.useState([]);
             const [selectedPeriod, setSelectedPeriod] = React.useState('10-2026');
 
-            const [basePay, setBasePay] = React.useState(1916.44);
+            // Actualizado según payslip de octubre: £22,999.00 / 12 = £1,916.58
+            const [basePay, setBasePay] = React.useState(1916.58);
             const [taxCode, setTaxCode] = React.useState('1329L');
             const [hasPension, setHasPension] = React.useState(true);
-            const [pensionPercent, setPensionPercent] = React.useState(5);
+            const [pensionPercent, setPensionPercent] = React.useState(4.9);
+            const [medicalBenefits, setMedicalBenefits] = React.useState(109.53); // AXA £96.67 + Healthshield £12.86
             const [showOnboardingModal, setShowOnboardingModal] = React.useState(false);
 
             const [usersList, setUsersList] = React.useState([]);
 
             const fixedAllowance = 80.27; 
-            const singaporeAllowancePerTrip = 421.32; 
+            const singaporeAllowancePerTrip = 335.19; // Ajustado al desglose real de payslip (£670.38 / 2 trips)
             const perthAllowancePerTrip = 239.12;
             const holidayRatePerDay = 17.39; 
 
@@ -348,6 +352,7 @@
                         if (data.taxCode !== undefined) setTaxCode(data.taxCode);
                         if (data.hasPension !== undefined) setHasPension(data.hasPension);
                         if (data.pensionPercent !== undefined) setPensionPercent(data.pensionPercent);
+                        if (data.medicalBenefits !== undefined) setMedicalBenefits(data.medicalBenefits);
                     }
                 });
 
@@ -367,7 +372,7 @@
                 }
             }, [currentScreen, isAdmin]);
 
-            const saveDataToCloud = async (newTrips, newFiles, customBase = basePay, customTax = taxCode, customHasPension = hasPension, customPension = pensionPercent) => {
+            const saveDataToCloud = async (newTrips, newFiles, customBase = basePay, customTax = taxCode, customHasPension = hasPension, customPension = pensionPercent, customMedical = medicalBenefits) => {
                 if (!currentUid || !window.firebaseAppInstances) return;
                 const { db, doc, setDoc } = window.firebaseAppInstances;
                 try {
@@ -378,6 +383,7 @@
                         taxCode: customTax,
                         hasPension: customHasPension,
                         pensionPercent: customPension,
+                        medicalBenefits: customMedical,
                         fixedAllowance: fixedAllowance
                     }, { merge: true });
                 } catch (e) {
@@ -403,7 +409,7 @@
                         isNewUser: false
                     }, { merge: true });
 
-                    await saveDataToCloud(allTrips, uploadedFiles, basePay, taxCode, hasPension, pensionPercent);
+                    await saveDataToCloud(allTrips, uploadedFiles, basePay, taxCode, hasPension, pensionPercent, medicalBenefits);
                     setCurrentUser(profileName);
                     setShowOnboardingModal(false);
                     alert(t.profileSaved);
@@ -1097,13 +1103,14 @@
                 return acc;
             }, 0);
 
+            // Sector Pay real basado en el payslip de Octubre (£74.85 Sector 2 + £359.25 Sector 3)
             const calculatedSectorPay = filteredTrips.reduce((acc, f) => {
                 if (f.holiday) return acc;
                 let total = 0;
                 if (f.type === 'perth' || (f.type === 'sby' && f.calledOut && f.callType === 'perth')) {
                     total = 152.02 + 37.42 + 74.85; 
                 } else if (f.type === 'singapore' || (f.type === 'sby' && f.calledOut && f.callType === 'singapore')) {
-                    total = 74.85 * 2; 
+                    total = 74.85 + 119.75; // Sector Pay 2 + Sector Pay 3 aproximado por tramo
                 }
                 
                 if (f.delay16h) {
@@ -1142,7 +1149,9 @@
                 taxFreeAllowanceMonthly = 1107.50;
             }
 
-            const taxableAmount = Math.max(0, estimatedGross - taxFreeAllowanceMonthly);
+            // Sumamos los beneficios médicos imponibles (Medical Benefits in Kind) al bruto tributable
+            const totalTaxableGross = estimatedGross + medicalBenefits;
+            const taxableAmount = Math.max(0, totalTaxableGross - taxFreeAllowanceMonthly);
             const estimatedTax = taxableAmount * 0.20;
 
             const niThresholdMonthly = 1048.00;
@@ -1211,7 +1220,7 @@
             return (
                 <div className="max-w-5xl mx-auto p-4 sm:p-6 pb-12 relative">
                     
-                    {/* MODAL DE ONBOARDING / PRIMER INICIO DE SESIÓN */}
+                    {/* MODAL DE ONBOARDING */}
                     {showOnboardingModal && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
                             <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100">
@@ -1233,6 +1242,17 @@
                                         />
                                     </div>
 
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">{t.medicalBenefitsLabel}</label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01"
+                                            value={medicalBenefits} 
+                                            onChange={(e) => setMedicalBenefits(parseFloat(e.target.value) || 0)} 
+                                            className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" 
+                                        />
+                                    </div>
+
                                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                                         <label className="flex items-center space-x-3 cursor-pointer mb-3">
                                             <input 
@@ -1249,7 +1269,7 @@
                                                 <label className="block text-xs font-semibold text-slate-600 mb-1">{t.pensionLabel}</label>
                                                 <input 
                                                     type="number" 
-                                                    step="0.5"
+                                                    step="0.1"
                                                     min="0"
                                                     max="100"
                                                     value={pensionPercent} 
@@ -1488,12 +1508,23 @@
                                     </div>
                                 </div>
 
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-600 mb-1">{t.medicalBenefitsLabel}</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.01"
+                                        value={medicalBenefits} 
+                                        onChange={(e) => setMedicalBenefits(parseFloat(e.target.value) || 0)} 
+                                        className="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold bg-slate-50 outline-none focus:ring-2 focus:ring-red-600" 
+                                    />
+                                </div>
+
                                 {hasPension && (
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">{t.pensionLabel}</label>
                                         <input 
                                             type="number" 
-                                            step="0.5"
+                                            step="0.1"
                                             min="0"
                                             max="100"
                                             value={pensionPercent} 
